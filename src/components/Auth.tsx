@@ -7,6 +7,7 @@ import {
 } from "firebase/auth";
 import { auth, serviceReady, googleAuthEnabled } from "../lib/firebase";
 import { useApp } from "../lib/context";
+import { authErrorMessage } from "../lib/auth-errors";
 import { Modal, ErrorBox } from "./ui";
 import { GraduationCap, Microscope, ArrowRight } from "lucide-react";
 export function AuthModal({
@@ -29,6 +30,7 @@ export function AuthModal({
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [busy, setBusy] = useState(false),
+    [googleBusy, setGoogleBusy] = useState(false),
     [success, setSuccess] = useState(""),
     [error, setError] = useState("");
   useEffect(() => {
@@ -82,23 +84,32 @@ export function AuthModal({
         await finish();
       }
     } catch (e: any) {
-      setError(e.message.replace("Firebase: ", ""));
+      setError(
+        e.code?.startsWith("auth/")
+          ? authErrorMessage(e)
+          : e.message || authErrorMessage(e),
+      );
     } finally {
       setBusy(false);
     }
   }
   async function google() {
     setBusy(true);
+    setGoogleBusy(true);
     setError("");
+    setSuccess("");
     try {
-      const r = await signInWithPopup(auth, new GoogleAuthProvider());
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      // Called directly from the button click to preserve browser user activation.
+      const r = await signInWithPopup(auth, provider);
       const p = await call("profile.get");
       if (!p)
         await call("profile.save", {
           profile: {
             name: r.user.displayName || "Researcher",
             role,
-            institution: "Independent researcher",
+            institution: "",
             categories: [],
             acceptingRequests: false,
             weeklyCapacity: 2,
@@ -107,9 +118,14 @@ export function AuthModal({
         });
       await finish();
     } catch (e: any) {
-      setError(e.message);
+      setError(
+        e.code?.startsWith("auth/")
+          ? authErrorMessage(e)
+          : "Google sign-in succeeded, but your profile could not load. Try again to finish setting up your workspace.",
+      );
     } finally {
       setBusy(false);
+      setGoogleBusy(false);
     }
   }
   if (!serviceReady)
@@ -133,7 +149,9 @@ export function AuthModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       title={
         mode === "signup"
           ? "Your next chapter starts here"
@@ -145,12 +163,14 @@ export function AuthModal({
     >
       <div className="segmented">
         <button
+          disabled={busy}
           className={mode === "signup" ? "active" : ""}
           onClick={() => setMode("signup")}
         >
           Create account
         </button>
         <button
+          disabled={busy}
           className={mode === "login" ? "active" : ""}
           onClick={() => setMode("login")}
         >
@@ -161,6 +181,7 @@ export function AuthModal({
         <div className="role-options">
           <button
             type="button"
+            disabled={busy}
             className={role === "researcher" ? "selected" : ""}
             onClick={() => setRole("researcher")}
           >
@@ -170,6 +191,7 @@ export function AuthModal({
           </button>
           <button
             type="button"
+            disabled={busy}
             className={role === "endorser" ? "selected" : ""}
             onClick={() => setRole("endorser")}
           >
@@ -178,6 +200,39 @@ export function AuthModal({
             <small>Support emerging research</small>
           </button>
         </div>
+      )}
+      {mode !== "reset" && googleAuthEnabled && (
+        <>
+          <button
+            type="button"
+            className="button google"
+            disabled={busy}
+            onClick={google}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="#4285F4"
+                d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.89-1.74 2.98-4.31 2.98-7.36Z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.04.97-3.38.97-2.61 0-4.83-1.77-5.62-4.15H3.04v2.59A10 10 0 0 0 12 22Z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M6.38 13.9a6 6 0 0 1 0-3.8V7.51H3.04a10 10 0 0 0 0 8.98l3.34-2.59Z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.95c1.47 0 2.79.51 3.82 1.51l2.87-2.86A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.96 5.51l3.34 2.59C7.17 7.72 9.39 5.95 12 5.95Z"
+              />
+            </svg>
+            {googleBusy ? "Connecting to Google…" : "Continue with Google"}
+          </button>
+          <div className="auth-divider">
+            <span>or continue with email</span>
+          </div>
+        </>
       )}
       <form onSubmit={submit} className="form">
         {success && (
@@ -237,6 +292,7 @@ export function AuthModal({
         {mode === "login" && (
           <button
             type="button"
+            disabled={busy}
             className="text-link"
             onClick={() => setMode("reset")}
           >
@@ -244,11 +300,6 @@ export function AuthModal({
           </button>
         )}
       </form>
-      {mode !== "reset" && googleAuthEnabled && (
-        <button className="button google" disabled={busy} onClick={google}>
-          Continue with Google
-        </button>
-      )}
       <p className="fine-print">
         By creating an account, you agree to follow the community guidelines.
         Review how your profile and research data are handled before joining.
