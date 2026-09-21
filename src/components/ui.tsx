@@ -1,19 +1,27 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, ArrowUpRight, LoaderCircle, Inbox } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import "./media.css";
 import { initials } from "../lib/types";
 export function Avatar({
   name,
+  src,
   color = "",
   large = false,
 }: {
   name: string;
+  src?: string;
   color?: string;
   large?: boolean;
 }) {
+  const [failed, setFailed] = useState("");
   return (
     <span className={`avatar ${color} ${large ? "large" : ""}`}>
-      {initials(name)}
+      {src && failed !== src ? (
+        <img src={src} alt="" loading="lazy" onError={() => setFailed(src)} />
+      ) : (
+        initials(name)
+      )}
     </span>
   );
 }

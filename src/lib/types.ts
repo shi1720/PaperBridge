@@ -1,6 +1,8 @@
 export type RecordData = { id: string; [key: string]: any };
 export interface Profile extends RecordData {
   name: string;
+  avatarId?: string | null;
+  avatarUrl?: string;
   role: "researcher" | "endorser";
   headline: string;
   institution: string;
@@ -30,3 +32,16 @@ export const initials = (name: string = "Researcher") =>
     .slice(0, 2)
     .join("")
     .toUpperCase();
+
+export type PostType = "update" | "question" | "paper" | "milestone";
+export type MediaAsset = {
+  id: string;
+  purpose?: "avatar" | "community";
+  kind: "image" | "pdf";
+  fileName: string;
+  size: number;
+  contentType: string;
+  url: string;
+  width?: number;
+  height?: number;
+};

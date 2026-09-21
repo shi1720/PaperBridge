@@ -103,8 +103,11 @@ test("presentation quote marks are removed only around a verified excerpt", () =
   assert.deepEqual(result.findings, [finding, finding]);
   assert.equal(result.limitations.length, 1);
 });
-test("long input visibly tracks truncation; DOI extraction bounded", () => {
-  const e = c.manuscriptExcerpt("x".repeat(40000));
+test("full input is never silently truncated and partial mode is explicit; DOI extraction bounded", () => {
+  assert.equal(c.manuscriptExcerpt("x".repeat(100000)).text.length, 100000);
+  assert.throws(() => c.manuscriptExcerpt("x".repeat(100001)), /100,000/);
+  assert.throws(() => c.manuscriptExcerpt("text", "unknown"), /coverage/);
+  const e = c.manuscriptExcerpt("x".repeat(40000), "partial");
   assert.equal(e.text.length, 32000);
   assert.equal(e.truncated, true);
   assert.equal(e.totalCharacters, 40000);
@@ -131,7 +134,7 @@ test("OpenAI adapter caps output and disables storage; parses only message text"
     const b = JSON.parse(options.body);
     assert.equal(b.store, false);
     assert.match(b.input, /JSON/);
-    assert.equal(b.max_output_tokens, 2400);
+    assert.equal(b.max_output_tokens, 6000);
     assert.equal(options.redirect, "error");
     return new Response(
       JSON.stringify({
@@ -192,7 +195,7 @@ test("Anthropic adapter uses headers and handles truncation explicitly", async (
   global.fetch = async (url, options) => {
     assert.equal(options.headers["x-api-key"], "secret");
     assert.equal(options.headers["anthropic-version"], "2023-06-01");
-    assert.equal(JSON.parse(options.body).max_tokens, 2400);
+    assert.equal(JSON.parse(options.body).max_tokens, 6000);
     return new Response(
       JSON.stringify({
         stop_reason: "max_tokens",
@@ -221,7 +224,7 @@ test("Gemini adapter authenticates in headers, selects JSON and extracts usage",
     assert.equal(options.headers["x-goog-api-key"], "secret");
     const b = JSON.parse(options.body);
     assert.equal(b.generationConfig.responseMimeType, "application/json");
-    assert.equal(b.generationConfig.maxOutputTokens, 2400);
+    assert.equal(b.generationConfig.maxOutputTokens, 6000);
     return new Response(
       JSON.stringify({
         candidates: [
@@ -290,4 +293,104 @@ test("Gemini catalog paginates and filters out models without text generation", 
   } finally {
     global.fetch = original;
   }
+});
+
+test("Astra medium uses structured output, increased reasoning budget and reports reasoning usage", async () => {
+  const original = global.fetch;
+  global.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    assert.equal(body.model, "gpt-6-astra");
+    assert.deepEqual(body.reasoning, { effort: "medium" });
+    assert.equal(body.max_output_tokens, 12000);
+    assert.equal(body.text.format.type, "json_schema");
+    assert.equal(body.text.format.strict, true);
+    assert.equal(body.temperature, undefined);
+    return new Response(
+      JSON.stringify({
+        status: "completed",
+        model: "gpt-6-astra-2026-09-01",
+        output: [{ content: [{ type: "output_text", text: "{}" }] }],
+        usage: {
+          input_tokens: 100,
+          output_tokens: 1000,
+          output_tokens_details: { reasoning_tokens: 800 },
+        },
+      }),
+    );
+  };
+  try {
+    const r = await c.generate(
+      { provider: "openai", model: "gpt-6-astra" },
+      "secret",
+      "instructions",
+      "manuscript",
+    );
+    assert.equal(r.usage.reasoningTokens, 800);
+    assert.equal(r.model, "gpt-6-astra-2026-09-01");
+    assert.throws(
+      () =>
+        c.normalizeConfig({
+          provider: "openai",
+          model: "gpt-6-astra",
+          reasoningEffort: "none",
+        }),
+      /does not support/,
+    );
+    assert.throws(
+      () =>
+        c.normalizeConfig({
+          provider: "anthropic",
+          model: "claude-test",
+          reasoningEffort: "medium",
+        }),
+      /does not support/,
+    );
+  } finally {
+    global.fetch = original;
+  }
+});
+test("PDF diagnostics separate measured extraction limits from visual inspection", () => {
+  assert.equal(c.pdfDiagnostics(null).sourceCoverage, "unknown");
+  const result = c.pdfDiagnostics({
+    version: 1,
+    totalPages: 3,
+    scannedPages: 2,
+    textTruncated: true,
+    pages: [
+      {
+        page: 1,
+        width: 600,
+        height: 800,
+        textCharacters: 10,
+        medianFontSize: 7,
+        textBounds: { left: -5, top: 0, right: 590, bottom: 790 },
+      },
+      {
+        page: 2,
+        width: 600,
+        height: 800,
+        textCharacters: 1500,
+        medianFontSize: 12,
+      },
+    ],
+  });
+  assert.equal(result.sourceCoverage, "incomplete");
+  assert.equal(result.visualInspection, false);
+  assert.equal(result.warnings.length, 4);
+  assert.match(c.PROMPTS.formatting, /never claim you visually inspected/);
+  assert.match(c.PROMPTS.readiness, /not a pass\/fail certification/);
+});
+test("bounded specialists run in parallel without exceeding concurrency", async () => {
+  let active = 0,
+    maxActive = 0;
+  const completed = [];
+  await c.runBounded(c.AGENTS, 3, async (name) => {
+    active++;
+    maxActive = Math.max(maxActive, active);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    completed.push(name);
+    active--;
+  });
+  assert.equal(maxActive, 3);
+  assert.deepEqual(completed.sort(), [...c.AGENTS].sort());
 });

@@ -70,7 +70,6 @@ Annotations persist `paperVersion` and list responses normalize older notes with
 
 `ai.jobs` projects only `id`, `ownerId`, `paperId`, `title`, `status`, `createdAt`, and `updatedAt`. Findings, quotations, prompts/configuration, consent, errors and other report bodies are returned only by owner-authorized `ai.job.get`. These bounded summaries keep library/history responses small and avoid repeatedly transferring private manuscript and report bodies.
 
-
 ## Isolated runtime configuration
 
 All functions use `PAPERBRIDGE_DATABASE_ID`, `PAPERBRIDGE_AUTH_TENANT_ID`, `PAPERBRIDGE_STORAGE_BUCKET`, and `PAPERBRIDGE_SERVICE_ACCOUNT`. Production must set these explicitly. A missing database, tenant or bucket fails closed; the production database cannot be `(default)`. The only default-resource fallback is local emulator use (Auth and Storage additionally require a `demo-` project). Never remove tenant configuration to work around sign-in problems.
@@ -86,3 +85,27 @@ Exports are `paperbridgeApi`, `paperbridgeUploadManuscript`, `paperbridgeSendQue
 Each send reserves one attempt transactionally against UTC hourly, daily and calendar-month budgets. Defaults are 50/hour, 250/day and 7,000/month; configure `EMAIL_HOURLY_LIMIT`, `EMAIL_DAILY_LIMIT`, and `EMAIL_MONTHLY_LIMIT` for the selected provider. Zero pauses that window. Excess mail stays queued until reset and does not consume an attempt. Actual send attempts, including retries and failed connections, consume the conservative local allowance. Missing credentials do not. Each message stops before a ninth attempt. These limits cover this app's outbox, not another app sharing a provider account. Provider quotas and reset clocks can differ.
 
 SMTP errors persist only allowlisted error codes and bounded numeric status codes; raw responses and credentials are never saved. TLS is mandatory. `EMAIL_REPLY_TO` can direct responses to the support inbox. A provider accepting mail does not prove final delivery: review its transactional logs and verify an actual recipient inbox during release. See [free email setup](email-setup.md) for provider prerequisites.
+
+## Profile and community media
+
+`paperbridgeUploadMedia` accepts an authenticated raw-file POST with `purpose=avatar|community` and `fileName`. It checks a non-revoked tenant token and holds the same account-deletion lease as other mutations. Avatar inputs are JPEG/PNG/WebP up to 5 MiB, community images up to 8 MiB, and community PDFs up to 20 MiB. Images are fully decoded with a 20-megapixel ceiling and rebuilt as metadata-free, single-frame WebP: avatars are 512×512; community images fit within 2048×2048. SVG and animated formats are rejected. PDFs are header/EOF-checked untrusted attachments, served with download disposition; this is not malware scanning or a guarantee about embedded PDF content.
+
+The response is `{data:{id,purpose,kind,fileName,size,contentType,width,height,url,expiresAt}}`. It does not expose the bucket path. The endpoint allows 12 uploads/minute and reserves a daily allowance of 40 files/100 MiB before image decoding. Failed attempts can consume this conservative allowance. Owner-only drafts expire after 24 hours. `media.remove {id}` deletes an unclaimed owner draft. `paperbridgeCleanupMedia` runs hourly, purges up to 200 expired/failed/detached objects, and retains retryable deletion records when object deletion fails.
+
+`profile.save` accepts `profile.avatarId`; omission preserves the current photo and null removes it. Profile, directory and chat DTOs include authorized avatar URLs. `feed.post`/`feed.edit` accept up to four `mediaIds` and `postType` (`update`, `question`, `paper`, `milestone`). Edits preserve omitted properties. The claim transaction validates ownership, purpose and exclusive use. Replacing a photo, removing an attachment, or deleting a post marks the old object for deletion atomically and attempts immediate cleanup. Public community attachments use their own upload objects; linking a private manuscript is rejected.
+
+`media.get {id}` refreshes a read URL after checking the current profile/post reference, visibility and both directions of blocking. Drafts are owner-only, private-post attachments are author-only, and private-profile photos are hidden from other accounts. Production URLs expire after ten minutes; an issued URL cannot be revoked immediately when visibility changes, and downloaded copies cannot be recalled. Production objects have no Firebase download tokens. Local emulators reuse an emulator-only token so repeated reads do not invalidate an already rendered image.
+
+Post DTOs include `attachments`, `authorAvatarUrl`, `saved` and `liked`. `feed.save {id}` toggles a private bookmark (500 maximum). `feed.list {saved:true}` shows up to the newest 100 bookmarked records, then filters current post access; `authorId` selects recent posts from one author. Saved/following/author filters are mutually exclusive. Account export includes owned media metadata and bookmarks without signed URLs. Account deletion removes media records, quota state, bookmark records and the account's bucket prefix.
+
+## Request-scoped PDF note threads
+
+`annotation.list/save` accept `requestId`. Scoped shared notes are visible only within that request's author/reviewer pair. A reader without request context never receives another user's scoped notes, even when reviewing the same manuscript through a different request. Private notes remain author-only. Existing unscoped shared notes retain their earlier manuscript-sharing semantics. Request context includes that request's visible notes plus the caller's unscoped private notes.
+
+`annotation.reply {id,body}` appends a signed-in author/name/date record (5,000 characters, 50 replies maximum); `annotation.resolve {id,resolved}` records or clears resolution author/name/date. Both participants may operate on current-version shared notes while the exact request remains active. Private-note operations require the author. Closed requests and archived PDF revisions reject edits, replies and resolution changes; the note's author can still delete it. Editing preserves replies and resolution state and cannot change the request scope. Account export includes the caller's own replies to others' notes; erasure removes those replies and anonymizes resolution attribution.
+
+`request.get` adds `requesterAvatarUrl` and `reviewerAvatarUrl`; request-message and feed-comment DTOs add `authorAvatarUrl`. All respect current photo visibility/blocking.
+
+## PDF extraction observations
+
+`paper.save` accepts validated `pdfAnalysis` version 1 with total/scanned pages, extracted-character count, truncation and up to 100 sequential per-page observations. Numbers must be finite and bounded; bounds may extend outside the page to describe clipping. These browser observations are advisory, not verified measurements. Full paper/revision responses retain page geometry; list responses expose only coverage/count fields. Replacing text/PDF without new observations clears stale metrics. Historical revisions keep their own observations and never inherit current geometry.

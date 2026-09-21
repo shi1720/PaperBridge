@@ -1,0 +1,102 @@
+.ai-recommendation {
+  padding: 20px;
+  border: 1px solid #cad7bd;
+  background: #f1f5e9;
+  border-radius: 12px;
+  margin: 22px 0;
+}
+.ai-recommendation p {
+  line-height: 1.7;
+}
+.ai-recommendation small {
+  display: block;
+  margin-top: 12px;
+}
+.ai-coverage p {
+  margin: 8px 0 0;
+}
+.ai-stage-progress {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 20px 0;
+}
+.ai-stage-progress li {
+  padding: 12px;
+  border: 1px solid #d8dfd0;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.ai-stage-progress li span {
+  text-transform: capitalize;
+}
+.ai-stage-progress li[data-status="running"] {
+  background: #f0edf6;
+  border-color: #8b73a3;
+}
+.ai-stage-progress li[data-status="completed"] {
+  background: #edf4e6;
+  border-color: #94b27c;
+}
+.ai-stage-progress li[data-status="failed"] {
+  background: #fbefea;
+  border-color: #be8068;
+}
+.ai-pdf-diagnostics {
+  margin: 18px 0;
+  padding: 14px;
+  background: #f3f5f0;
+  border-radius: 8px;
+}
+.ai-pdf-diagnostics p,
+.ai-pdf-diagnostics li {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.review-results > .panel-heading {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.review-results .tabs {
+  overflow-x: auto;
+}
+.review-lenses {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+@media (max-width: 600px) {
+  .ai-stage-progress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ai-specialist-details {
+  padding: 16px 20px;
+  margin: 22px 0;
+  border: 1px solid #d8dfd0;
+  border-radius: 10px;
+  background: #f6f8f2;
+}
+.ai-specialist-details > summary {
+  cursor: pointer;
+  font-weight: 500;
+  line-height: 1.65;
+}
+.ai-specialist-details .review-lenses {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 0;
+}
+.ai-specialist-details .lens-card {
+  padding: 20px;
+}
+.ai-specialist-details .lens-card h3 {
+  font-size: 20px;
+}
+@media (max-width: 600px) {
+  .ai-specialist-details {
+    padding: 14px;
+  }
+}

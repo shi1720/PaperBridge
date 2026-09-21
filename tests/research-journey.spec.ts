@@ -241,6 +241,48 @@ test("two researchers complete a private manuscript and endorsement conversation
   await expect(
     author.getByText("Version one observation.", { exact: true }),
   ).toBeVisible();
+  await author.getByLabel("Visibility", { exact: true }).selectOption("shared");
+  await author
+    .getByLabel("Your note · page 1")
+    .fill("Please clarify the scope of the benchmark claim.");
+  await author.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(
+    author.getByText("Please clarify the scope of the benchmark claim.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await reviewer.goto(url + "?tab=manuscript");
+  await expect(
+    reviewer.getByText("Version one observation.", { exact: true }),
+  ).not.toBeVisible();
+  const sharedNote = reviewer
+    .locator(".pb-note")
+    .filter({ hasText: "Please clarify the scope of the benchmark claim." });
+  await expect(sharedNote).toBeVisible();
+  await sharedNote.getByRole("button", { name: "Reply", exact: true }).click();
+  await sharedNote
+    .getByLabel("Reply to note on page 1")
+    .fill("Agreed. Limit this to the two evaluated benchmarks.");
+  await sharedNote
+    .getByRole("button", { name: "Send reply", exact: true })
+    .click();
+  await expect(sharedNote).toContainText(
+    "Agreed. Limit this to the two evaluated benchmarks.",
+  );
+  await author.reload();
+  const authorNote = author
+    .locator(".pb-note")
+    .filter({ hasText: "Please clarify the scope of the benchmark claim." });
+  await authorNote
+    .getByRole("button", { name: "1 reply", exact: true })
+    .click();
+  await expect(authorNote).toContainText(
+    "Agreed. Limit this to the two evaluated benchmarks.",
+  );
+  await authorNote
+    .getByRole("button", { name: "Resolve", exact: true })
+    .click();
+  await expect(authorNote).toContainText("Resolved");
   await author
     .getByRole("button", { name: "Upload revision", exact: true })
     .click();
@@ -261,9 +303,7 @@ test("two researchers complete a private manuscript and endorsement conversation
   await expect(
     author.getByText("Version one observation.", { exact: true }),
   ).toBeVisible();
-  await author
-    .getByLabel("Your note · page 1")
-    .fill("Historical version is read only.");
+  await expect(author.getByLabel("Your note · page 1")).toBeDisabled();
   await expect(
     author.getByRole("button", { name: "Save note", exact: true }),
   ).toBeDisabled();
@@ -282,7 +322,7 @@ test("two researchers complete a private manuscript and endorsement conversation
     "Withdrawn",
   );
   await reviewer.reload();
-  await reviewer.getByRole("link", { name: "Read manuscript" }).click();
+  await expect(reviewer).toHaveURL(/tab=manuscript/);
   await expect(reviewer.getByRole("alert")).toContainText("not shared");
   await authorContext.close();
   await reviewerContext.close();

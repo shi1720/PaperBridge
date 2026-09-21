@@ -7,8 +7,15 @@ import {
   UserPlus,
   Search,
   SlidersHorizontal,
+  MessageCircle,
+  BookOpen,
+  MapPin,
+  ArrowLeft,
 } from "lucide-react";
 import { useApp, useData } from "../lib/context";
+import { PostAttachments } from "./CommunityMedia";
+import { date } from "../lib/types";
+import "./community.css";
 import { CATEGORIES } from "../lib/categories";
 import {
   Avatar,
@@ -30,6 +37,7 @@ export function ResearcherProfile({ onAuth }: { onAuth: () => void }) {
     loading,
   } = useData("profile.get", { id }, !!profile && !!id);
   const follows = useData("follow.list", {}, !!profile);
+  const activity = useData("feed.list", { authorId: id }, !!profile && !!id);
   const [busy, setBusy] = useState(""),
     [actionError, setActionError] = useState("");
   const following = Array.isArray(follows.data)
@@ -79,101 +87,198 @@ export function ResearcherProfile({ onAuth }: { onAuth: () => void }) {
   const own = person.id === profile.id;
   return (
     <>
-      <PageHeading
-        eyebrow="RESEARCHER PROFILE"
-        title={person.name}
-        description={
-          person.headline || "A member of the PaperBridge research community."
-        }
-      />
-      <section className="card researcher-profile">
-        <div className="researcher-profile-identity">
-          <Avatar name={person.name} color={person.color} large />
-          <div>
-            <strong>{person.institution || "Independent researcher"}</strong>
-            <p>
-              {person.role === "endorser"
-                ? "Participating endorser"
-                : "Researcher"}
+      <Link className="back-link" to="/researchers">
+        <ArrowLeft size={16} />
+        All researchers
+      </Link>
+      <div className="profile-social-layout">
+        <section className="card researcher-profile-v2">
+          <div className="researcher-profile-cover" aria-hidden="true" />
+          <div className="researcher-profile-main">
+            <div className="researcher-profile-identity">
+              <Avatar
+                name={person.name}
+                src={person.avatarUrl}
+                color={person.color}
+                large
+              />
+              <div>
+                <h1>{person.name}</h1>
+                <p>
+                  {person.role === "endorser"
+                    ? "Researcher · Participating endorser"
+                    : "Researcher"}
+                </p>
+              </div>
+            </div>
+            {person.headline && (
+              <p className="profile-headline">{person.headline}</p>
+            )}
+            <p className="profile-institution">
+              <MapPin size={14} />
+              {person.institution || "Independent researcher"}
             </p>
+            <div className="button-row profile-social-actions">
+              {own ? (
+                <Link className="button primary" to="/settings">
+                  Edit your research profile <ArrowRight size={16} />
+                </Link>
+              ) : (
+                <>
+                  <button
+                    className="button primary"
+                    disabled={!!busy || follows.loading || !!follows.error}
+                    aria-pressed={following}
+                    onClick={() => act("follow")}
+                  >
+                    {following ? <Check size={16} /> : <UserPlus size={16} />}{" "}
+                    {busy === "follow"
+                      ? "Updating…"
+                      : following
+                        ? "Following"
+                        : "Follow researcher"}
+                  </button>
+                  <button
+                    className="button"
+                    disabled={!!busy}
+                    onClick={() => act("message")}
+                  >
+                    <MessageSquare size={16} />
+                    {busy === "message" ? "Opening…" : "Message researcher"}
+                  </button>
+                </>
+              )}
+            </div>
+            {actionError && <ErrorBox message={actionError} />}{" "}
+            {follows.error && !own && <ErrorBox message={follows.error} />}
+            <h3>ABOUT THE RESEARCH</h3>
+            <p className="researcher-bio">
+              {person.bio || "This researcher has not added a bio yet."}
+            </p>
+            {!!person.categories?.length && (
+              <>
+                <h3>RESEARCH INTERESTS</h3>
+                <div className="tags">
+                  {person.categories.map((category: string) => (
+                    <Tag key={category}>
+                      {category} ·{" "}
+                      {CATEGORIES.find((c) => c.id === category)?.name ||
+                        category}
+                    </Tag>
+                  ))}
+                </div>
+              </>
+            )}
+            {(person.arxivUrl || person.orcid) && (
+              <>
+                <h3>RESEARCH ELSEWHERE</h3>
+                <div className="button-row researcher-links">
+                  {person.arxivUrl && (
+                    <External href={person.arxivUrl}>
+                      arXiv author profile
+                    </External>
+                  )}
+                  {person.orcid && (
+                    <External
+                      href={
+                        "https://orcid.org/" + encodeURIComponent(person.orcid)
+                      }
+                    >
+                      ORCID · {person.orcid}
+                    </External>
+                  )}
+                </div>
+              </>
+            )}
+            {own && !person.publicProfile && (
+              <p className="notice">
+                Your profile is private. Other members cannot open this page.
+                You can change its visibility in Settings.
+              </p>
+            )}
+            {person.role === "endorser" && (
+              <p className="notice">
+                {person.acceptingRequests
+                  ? "Accepting endorsement requests."
+                  : "Endorsement requests are currently paused."}{" "}
+                Eligibility is self-attested; confirm category-specific
+                privileges on arXiv.
+              </p>
+            )}
           </div>
-        </div>
-        <h2>About the research</h2>
-        <p className="researcher-bio">
-          {person.bio || "This researcher has not added a bio yet."}
-        </p>
-        <div className="tags">
-          {(person.categories || []).map((category: string) => (
-            <Tag key={category}>
-              {category} ·{" "}
-              {CATEGORIES.find((c) => c.id === category)?.name || category}
-            </Tag>
-          ))}
-        </div>
-        <div className="button-row researcher-links">
-          {person.arxivUrl && (
-            <External href={person.arxivUrl}>arXiv author profile</External>
-          )}
-          {person.orcid && (
-            <External
-              href={"https://orcid.org/" + encodeURIComponent(person.orcid)}
-            >
-              ORCID · {person.orcid}
-            </External>
-          )}
-        </div>
-        {own && !person.publicProfile && (
-          <p className="notice">
-            Your profile is private. Other members cannot open this page. You
-            can change its visibility in Settings.
-          </p>
-        )}
-        {person.role === "endorser" && (
-          <p className="notice">
-            {person.acceptingRequests
-              ? "Accepting endorsement requests."
-              : "Endorsement requests are currently paused."}{" "}
-            Eligibility is self-attested; confirm category-specific privileges
-            on arXiv.
-          </p>
-        )}
-        {actionError && <ErrorBox message={actionError} />}
-        {follows.error && !own && <ErrorBox message={follows.error} />}
-        <div className="button-row">
-          {own ? (
-            <Link className="button primary" to="/settings">
-              Edit your research profile <ArrowRight size={16} />
-            </Link>
+        </section>
+        <section
+          className="card profile-activity"
+          aria-label="Researcher activity"
+        >
+          <div className="profile-activity-heading">
+            <MessageCircle size={20} />
+            <h2>Research in the open</h2>
+          </div>
+          <p className="fine-print">Recent posts shared with the community</p>
+          {activity.loading ? (
+            <Loading />
+          ) : activity.error ? (
+            <ErrorBox message={activity.error} />
+          ) : activity.data?.length ? (
+            activity.data.slice(0, 6).map((post: any) => (
+              <article className="profile-activity-post" key={post.id}>
+                <div className="post-meta-row">
+                  <span className={`post-kind ${post.postType || "update"}`}>
+                    {{
+                      update: "Research update",
+                      question: "Question",
+                      paper: "Paper",
+                      milestone: "Milestone",
+                    }[post.postType as string] || "Research update"}
+                  </span>
+                  <time className="profile-post-date">
+                    {date(post.createdAt)}
+                  </time>
+                </div>
+                <p>{post.body}</p>
+                <PostAttachments assets={post.attachments || []} />
+                <div className="button-row">
+                  <span>
+                    {post.commentCount || 0}{" "}
+                    {(post.commentCount || 0) === 1 ? "reply" : "replies"}
+                  </span>
+                  <Link
+                    className="text-link"
+                    to={"/community#post-" + encodeURIComponent(post.id)}
+                  >
+                    Open discussion <ArrowRight size={14} />
+                  </Link>
+                </div>
+              </article>
+            ))
           ) : (
-            <>
-              <button
-                className="button primary"
-                disabled={!!busy || follows.loading || !!follows.error}
-                aria-pressed={following}
-                onClick={() => act("follow")}
-              >
-                {following ? <Check size={16} /> : <UserPlus size={16} />}
-                {busy === "follow"
-                  ? "Updating…"
-                  : following
-                    ? "Following"
-                    : "Follow researcher"}
-              </button>
-              <button
-                className="button"
-                disabled={!!busy}
-                onClick={() => act("message")}
-              >
-                <MessageSquare size={16} />
-                {busy === "message" ? "Opening…" : "Message researcher"}
-              </button>
-            </>
+            <div className="profile-activity-empty">
+              <BookOpen size={26} />
+              <h3>
+                {own
+                  ? "Let people in on your process."
+                  : "The conversation is still ahead."}
+              </h3>
+              <p>
+                {own
+                  ? "Share a question, a useful paper, or a small step forward. Your posts will appear here."
+                  : "This researcher has not shared any community posts yet."}
+              </p>
+              {own && (
+                <Link className="button" to="/community">
+                  Share your first update <ArrowRight size={15} />
+                </Link>
+              )}
+            </div>
           )}
-          <Link className="text-link" to="/community">
-            Back to the community <ArrowRight size={16} />
-          </Link>
-        </div>
-      </section>
+          {!!activity.data?.length && (
+            <Link className="text-link profile-more-community" to="/community">
+              Explore more research conversations <ArrowRight size={15} />
+            </Link>
+          )}
+        </section>
+      </div>
     </>
   );
 }
@@ -256,10 +361,15 @@ export function Researchers({ onAuth }: { onAuth: () => void }) {
           ) : error ? (
             <ErrorBox message={error} />
           ) : data?.length ? (
-            <div className="people-grid">
+            <div className="people-grid researchers-v2">
               {data.map((p: any) => (
                 <article className="person-card" key={p.id}>
-                  <Avatar name={p.name} color={p.color} large />
+                  <Avatar
+                    src={p.avatarUrl}
+                    name={p.name}
+                    color={p.color}
+                    large
+                  />
                   <h2>
                     <Link
                       className="researcher-name"
@@ -268,6 +378,11 @@ export function Researchers({ onAuth }: { onAuth: () => void }) {
                       {p.name}
                     </Link>
                   </h2>
+                  <span className="post-kind">
+                    {p.role === "endorser"
+                      ? "Researcher · Endorser"
+                      : "Researcher"}
+                  </span>
                   <p className="institution">
                     {p.institution || "Independent researcher"}
                   </p>

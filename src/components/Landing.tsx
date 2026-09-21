@@ -17,6 +17,10 @@ import {
   ShieldCheck,
   UserRound,
   Heart,
+  Image,
+  Bookmark,
+  LayoutList,
+  ScanSearch,
 } from "lucide-react";
 import { serviceReady } from "../lib/firebase";
 import "./landing.css";
@@ -188,10 +192,10 @@ export function Landing({
           <SlidersHorizontal size={17} /> Find potential endorsers
         </span>
         <span>
-          <LockKeyhole size={17} /> Private PDF collaboration
+          <LockKeyhole size={17} /> Shared review workspaces
         </span>
         <span>
-          <Sparkles size={17} /> Four-stage AI review
+          <Sparkles size={17} /> Six-stage manuscript review
         </span>
         <span>
           <Users size={17} /> A social network for researchers
@@ -244,13 +248,25 @@ export function Landing({
             <div>
               <h3>Make the next draft better</h3>
               <p>
-                Get email updates, discuss the paper privately, and respond to
-                highlights and comments. Upload a new version without losing the
-                conversation.
+                Open the request’s shared workspace. Track its stage, read the
+                PDF, reply to highlighted notes, and resolve feedback together.
+                Upload a revision while keeping earlier notes with their
+                version.
               </p>
             </div>
           </li>
         </ol>
+        <div className="lp-collaboration-promise">
+          <MessageSquare size={22} />
+          <div>
+            <strong>The conversation belongs with the paper.</strong>
+            <p>
+              Each request has its own in-app discussion, manuscript reader,
+              shared notes, and activity history. Email notifications bring you
+              back to the workspace. Your private notes remain yours.
+            </p>
+          </div>
+        </div>
         <div className="lp-arxiv-handoff">
           <ExternalLink size={17} />
           <p>
@@ -272,7 +288,7 @@ export function Landing({
       <section className="lp-ai-section" id="ai-review">
         <div className="lp-ai-copy">
           <p className="landing-eyebrow">
-            <Sparkles size={16} /> THREE SPECIALIST AGENTS. ONE REVISION PLAN.
+            <Sparkles size={16} /> FIVE SPECIALIST AGENTS. ONE REVISION PLAN.
           </p>
           <h2>
             See the passage.
@@ -280,12 +296,28 @@ export function Landing({
             <em>Know what to improve.</em>
           </h2>
           <p>
-            Give your draft a focused review before you send it out. The
-            Evidence lens checks support for claims. The Attribution lens
-            examines credit and novelty wording. The Critical reader questions
-            methods and assumptions. Synthesis brings their findings into a
-            prioritized review.
+            Look beyond the abstract. Review the extracted manuscript for
+            unsupported claims, attribution gaps, weaknesses in methods,
+            formatting inconsistencies, and missing submission details. Five
+            specialists feed one prioritized revision plan.
           </p>
+          <div className="lp-agent-grid" aria-label="Five review specialties">
+            <span>
+              <ScanSearch size={15} /> Evidence & claims
+            </span>
+            <span>
+              <BookOpen size={15} /> Attribution & novelty
+            </span>
+            <span>
+              <SlidersHorizontal size={15} /> Methods & robustness
+            </span>
+            <span>
+              <LayoutList size={15} /> Formatting & structure
+            </span>
+            <span>
+              <ShieldCheck size={15} /> Submission readiness
+            </span>
+          </div>
           <ul className="lp-ai-benefits">
             <li>
               <Check size={16} /> Findings quote the manuscript passage they
@@ -296,16 +328,17 @@ export function Landing({
               revision.
             </li>
             <li>
-              <Check size={16} /> Inspect uncertainty and make the final call
-              yourself.
+              <Check size={16} /> See text coverage and PDF extraction limits
+              before you run a review.
             </li>
           </ul>
           <div className="lp-provider-note">
             <span>YOUR PROVIDER. YOUR MODELS.</span>
             <strong>OpenAI · Anthropic · Gemini</strong>
             <p>
-              Connect your own API keys. Choose models for each lens. Review
-              runs only with your consent; provider charges may apply.
+              Choose a model for each specialist. GPT-6 Astra with medium
+              reasoning is the recommended OpenAI setup when available on your
+              account. Runs require your consent and use your provider billing.
             </p>
           </div>
         </div>
@@ -327,15 +360,14 @@ export function Landing({
                 "State the baseline score and whether the gain is relative or in percentage points. Limit the conclusion to the dataset tested.",
             },
             {
-              agent: "02 · Attribution lens",
-              quote:
-                "To our knowledge, this is the first approach of its kind.",
-              concern: "Make the novelty claim specific.",
+              agent: "Formatting & structure",
+              quote: "3. Results · 5. Discussion",
+              concern: "Check the jump in section numbering.",
               revision:
-                "Name the closest prior approaches, cite them, and explain exactly what your method adds. A broad claim needs a clear comparison.",
+                "Confirm whether a section is missing or misnumbered, then update the headings and cross-references together.",
             },
             {
-              agent: "03 · Critical reader",
+              agent: "Methods & robustness",
               quote: "We select the best run from five random seeds.",
               concern: "Could the reported gain depend on the seed?",
               revision:
@@ -353,19 +385,20 @@ export function Landing({
           ))}
           <div className="lp-synthesis">
             <span>
-              <GitBranch size={17} /> 04 · Synthesis
+              <GitBranch size={17} /> Final stage · Your revision plan
             </span>
             <p>
               Prioritize the evaluation gap, clarify the reported improvement,
-              then sharpen the contribution statement. Inspect the supporting
-              findings before revising.
+              then resolve the structure issue. Export the review and work
+              through the supporting findings as you revise.
             </p>
           </div>
           <p className="lp-ai-caveat">
-            Illustrative examples, not a live review. AI examines extracted
-            manuscript text and can be wrong; figures, equations, and literature
-            coverage may be incomplete. It does not certify originality or
-            replace peer review.
+            Illustrative examples, not a live review. AI examines extracted text
+            and PDF extraction measurements; it does not visually inspect
+            figures or certify a venue’s formatting rules. Scans, equations, and
+            literature coverage can be incomplete. It does not certify
+            originality or replace peer review.
           </p>
         </div>
       </section>
@@ -484,10 +517,54 @@ export function Landing({
             </h2>
           </div>
           <p>
-            A paper can start a connection. Keep it going with a research feed,
-            discussions, follows, and private messages, whether you need an
-            endorsement today or want to build your research network over time.
+            Share the figure that started a question, a PDF others can read, or
+            a milestone worth discussing. Build a research network through
+            thoughtful posts, useful feedback, and conversations that continue.
           </p>
+        </div>
+        <div
+          className="lp-community-preview"
+          aria-label="Illustrative community attachments"
+        >
+          <div className="lp-social-preview-copy">
+            <span className="lp-micro">MORE THAN A TEXT FEED</span>
+            <h3>Put the work in the conversation.</h3>
+            <p>
+              Images, figures, and PDFs give people something specific to
+              respond to. Add context, invite a question, and keep the
+              discussion with the work.
+            </p>
+            <div className="lp-social-types">
+              <span>Research update</span>
+              <span>Question</span>
+              <span>Paper</span>
+              <span>Milestone</span>
+            </div>
+          </div>
+          <figure className="lp-attachment-preview">
+            <figcaption>Illustrative attachment preview</figcaption>
+            <div className="lp-figure-placeholder">
+              <Image size={30} />
+              <strong>Your figure, with context.</strong>
+              <span>Share an image and explain what matters.</span>
+            </div>
+            <div className="lp-pdf-attachment">
+              <FileText size={25} />
+              <div>
+                <strong>Your research paper.pdf</strong>
+                <span>Read the PDF inside the conversation</span>
+              </div>
+              <ArrowUpRight size={18} />
+            </div>
+            <div className="lp-social-actions">
+              <span>
+                <MessageSquare size={15} /> Discuss the details
+              </span>
+              <span>
+                <Bookmark size={15} /> Save for later
+              </span>
+            </div>
+          </figure>
         </div>
         <div className="lp-community-features">
           <article>
@@ -496,9 +573,9 @@ export function Landing({
             </span>
             <h3>A profile for your research</h3>
             <p>
-              Introduce your interests, background, and current work. Choose
-              whether other members can view your profile. An institutional
-              affiliation is optional.
+              Add your photo, research interests, background, and ORCID or arXiv
+              link. Let people get to know the researcher behind the work. An
+              institutional affiliation is optional.
             </p>
           </article>
           <article>
@@ -507,9 +584,9 @@ export function Landing({
             </span>
             <h3>A feed worth contributing to</h3>
             <p>
-              Share an arXiv paper, post a research question, or discuss a
-              result. Like and comment on posts. Follow researchers to focus
-              your feed on the people whose work you want to keep up with.
+              Upload images and PDFs, ask a question, or share a milestone.
+              Follow researchers, save useful posts, and return to the
+              conversations that matter to your work.
             </p>
           </article>
           <article>

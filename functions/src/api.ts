@@ -15,6 +15,14 @@ import * as D from "./domain";
 import { withAccountLease } from "./lifecycle";
 import { rateLimit } from "./rate-limit";
 import { queueVerificationEmail } from "./verification";
+import {
+  avatarUrl,
+  readableMedia,
+  mediaIds,
+  prepareMediaClaim,
+  purgeMedia,
+  removeMediaDraft,
+} from "./media";
 
 const db = () => getDb();
 const doc = (collection: string, id: string) =>
@@ -42,6 +50,79 @@ const publicPost = (p: any) => {
   const { likedBy, ...rest } = p;
   return rest;
 };
+
+async function profileDTO(p: any, uid: string) {
+  return p
+    ? { ...publicProfile(p), avatarUrl: await avatarUrl(p.id, uid) }
+    : null;
+}
+async function readablePost(id: string, uid: string) {
+  const post = await required("posts", id);
+  if (post.deleting || (post.visibility === "private" && post.authorId !== uid))
+    fail("not-found", "This post is unavailable.");
+  await ensureUnblocked(uid, post.authorId);
+  return post;
+}
+async function transactionReadablePost(
+  tx: Transaction,
+  id: string,
+  uid: string,
+) {
+  const post = (await tx.get(doc("posts", id))).data();
+  if (
+    !post ||
+    post.deleting ||
+    (post.visibility === "private" && post.authorId !== uid)
+  )
+    fail("not-found", "This post is unavailable.");
+  const [outgoing, incoming, deletion] = await tx.getAll(
+    doc("blocks", blockId(uid, post!.authorId)),
+    doc("blocks", blockId(post!.authorId, uid)),
+    doc("deletionJobs", post!.authorId),
+  );
+  if (outgoing.exists || incoming.exists || deletion.exists)
+    fail("permission-denied", "This post is unavailable.");
+  return post!;
+}
+
+async function postDTO(post: any, uid: string, knownLike?: boolean) {
+  const [authorAvatarUrl, saved, like, attachments] = await Promise.all([
+    avatarUrl(post.authorId, uid),
+    doc("savedPosts", hash(`${uid}:${post.id}`)).get(),
+    knownLike === undefined
+      ? doc("likes", hash(`${uid}:${post.id}`)).get()
+      : Promise.resolve(null),
+    Promise.all(
+      (post.mediaIds || []).map(async (id: string) => {
+        try {
+          return await readableMedia(id, uid);
+        } catch (error) {
+          if (
+            error instanceof HttpsError &&
+            ["permission-denied", "not-found"].includes(error.code)
+          )
+            return null;
+          throw error;
+        }
+      }),
+    ),
+  ]);
+  return {
+    ...publicPost(post),
+    postType: post.postType || "update",
+    visibility: post.visibility || "public",
+    attachments: attachments.filter(Boolean),
+    authorAvatarUrl,
+    saved: saved.exists,
+    liked: knownLike ?? like?.exists ?? false,
+  };
+}
+async function chatDTO(chat: any, uid: string) {
+  const pairs = await Promise.all(
+    chat.members.map(async (id: string) => [id, await avatarUrl(id, uid)]),
+  );
+  return { ...chat, avatarUrls: Object.fromEntries(pairs) };
+}
 
 async function required(collection: string, id: string): Promise<any> {
   const result = data(await doc(collection, id).get());
@@ -114,6 +195,7 @@ function revisionMetadata(paper: any): any {
     fileName: paper.fileName || "",
     updatedAt: paper.updatedAt || paper.createdAt || 0,
     title: paper.title || "",
+    pdfAnalysis: paper.pdfAnalysis || null,
   };
 }
 function versionHistory(paper: any): any[] {
@@ -362,7 +444,10 @@ async function dispatchApi(
     "request.create",
     "request.status",
     "request.comment",
+    "annotation.reply",
+    "annotation.resolve",
     "feed.post",
+    "feed.edit",
     "feed.like",
     "feed.comment",
     "chat.send",
@@ -381,17 +466,37 @@ async function dispatchApi(
       const p = D.profileInput(input.profile);
       const now = Date.now();
       const user = await getAppAuth().getUser(uid);
-      return db().runTransaction(async (tx) => {
+      let replacedAvatar: string[] = [];
+      const saved = await db().runTransaction(async (tx) => {
         const [existing, tombstone] = await Promise.all([
           tx.get(doc("profiles", uid)),
           tx.get(doc("deletionJobs", uid)),
         ]);
         if (tombstone.exists || user.disabled)
           fail("failed-precondition", "This account is being deleted.");
+        const previousAvatar = existing.data()?.avatarId || null;
+        const avatarId =
+          input.profile.avatarId === undefined
+            ? previousAvatar
+            : input.profile.avatarId === null || input.profile.avatarId === ""
+              ? null
+              : D.identifier(input.profile.avatarId);
+        replacedAvatar =
+          previousAvatar && previousAvatar !== avatarId ? [previousAvatar] : [];
+        const applyMedia = await prepareMediaClaim(
+          tx,
+          uid,
+          avatarId ? [avatarId] : [],
+          previousAvatar ? [previousAvatar] : [],
+          "profile",
+          uid,
+        );
+        applyMedia();
         tx.set(
           doc("profiles", uid),
           {
             ...p,
+            avatarId,
             id: uid,
             createdAt: existing.data()?.createdAt || now,
             updatedAt: now,
@@ -407,8 +512,12 @@ async function dispatchApi(
           },
           { merge: true },
         );
-        return { ...p, id: uid };
+        return { ...p, id: uid, avatarId };
       });
+      await Promise.all(
+        replacedAvatar.map((id) => purgeMedia(id).catch(() => false)),
+      );
+      return profileDTO(saved, uid);
     }
     case "profile.get": {
       const id = input.id ? D.identifier(input.id) : uid;
@@ -422,7 +531,7 @@ async function dispatchApi(
         if (!p.publicProfile)
           fail("permission-denied", "This profile is private.");
       }
-      return publicProfile(p);
+      return profileDTO(p, uid);
     }
     case "directory.list": {
       const blocked = await hiddenUsers(uid);
@@ -443,18 +552,24 @@ async function dispatchApi(
           D.category(input.category),
         );
       const search = D.text(input.search, "Search", 100, false).toLowerCase();
-      return rows(await query.limit(200).get())
-        .filter(
-          (p: any) =>
-            p.id !== uid &&
-            !blocked.has(p.id) &&
-            (!search ||
-              `${p.name} ${p.institution} ${p.headline}`
-                .toLowerCase()
-                .includes(search)),
-        )
-        .map(publicProfile);
+      return Promise.all(
+        rows(await query.limit(200).get())
+          .filter(
+            (p: any) =>
+              p.id !== uid &&
+              !blocked.has(p.id) &&
+              (!search ||
+                `${p.name} ${p.institution} ${p.headline}`
+                  .toLowerCase()
+                  .includes(search)),
+          )
+          .map((p: any) => profileDTO(p, uid)),
+      );
     }
+    case "media.get":
+      return readableMedia(D.identifier(input.id), uid);
+    case "media.remove":
+      return removeMediaDraft(D.identifier(input.id), uid);
     case "paper.save": {
       const p = input.paper || {};
       const id = p.id ? D.identifier(p.id) : db().collection("papers").doc().id;
@@ -515,6 +630,14 @@ async function dispatchApi(
             500_000,
             false,
           ),
+          pdfAnalysis:
+            p.pdfAnalysis === undefined
+              ? (p.storagePath !== undefined &&
+                  p.storagePath !== previous?.storagePath) ||
+                (p.text !== undefined && p.text !== previous?.text)
+                ? null
+                : previous?.pdfAnalysis || null
+              : D.pdfAnalysisInput(p.pdfAnalysis),
           visibility: p.visibility === "public" ? "public" : "private",
           createdAt: previous?.createdAt || now,
           updatedAt: now,
@@ -607,6 +730,7 @@ async function dispatchApi(
         id: paper.id,
         versions,
         currentVersion: paper.version || 1,
+        pdfAnalysis: selected.pdfAnalysis || null,
         text: version === (paper.version || 1) ? paper.text || "" : "",
         downloadUrl: await manuscriptDownloadUrl(selected.storagePath),
       };
@@ -784,8 +908,14 @@ async function dispatchApi(
       ]);
       return sorted([...rows(a), ...rows(b)]);
     }
-    case "request.get":
-      return participantRequest(D.identifier(input.id), uid);
+    case "request.get": {
+      const request = await participantRequest(D.identifier(input.id), uid);
+      const [requesterAvatarUrl, reviewerAvatarUrl] = await Promise.all([
+        avatarUrl(request.requesterId, uid),
+        avatarUrl(request.reviewerId, uid),
+      ]);
+      return { ...request, requesterAvatarUrl, reviewerAvatarUrl };
+    }
     case "request.status":
       return transitionRequest(
         D.identifier(input.id),
@@ -796,7 +926,7 @@ async function dispatchApi(
     case "request.messages": {
       const id = D.identifier(input.id);
       await participantRequest(id, uid);
-      return sorted(
+      const messages = sorted(
         rows(
           await db()
             .collection("requestMessages")
@@ -807,6 +937,15 @@ async function dispatchApi(
         ),
         500,
       ).reverse();
+      return Promise.all(
+        messages.map(async (m) => ({
+          ...m,
+          authorAvatarUrl:
+            m.authorId && m.authorId !== "system"
+              ? await avatarUrl(m.authorId, uid)
+              : null,
+        })),
+      );
     }
     case "request.comment": {
       const id = D.identifier(input.id);
@@ -814,7 +953,7 @@ async function dispatchApi(
       const otherId =
         req.requesterId === uid ? req.reviewerId : req.requesterId;
       await ensureUnblocked(uid, otherId);
-      if (["withdrawn", "declined"].includes(req.status))
+      if (["withdrawn", "declined", "endorsed"].includes(req.status))
         fail("failed-precondition", "This request is closed.");
       const body = D.text(input.body, "Comment", 10_000);
       const p = await profile(uid);
@@ -829,39 +968,102 @@ async function dispatchApi(
         kind: "comment",
         createdAt: now,
       };
-      const batch = db().batch();
-      batch.create(ref, message);
-      await notification(
-        batch,
-        otherId,
-        "New review comment",
-        `${p.name} left feedback on “${req.title}”.`,
-        `/requests/${id}`,
-        now,
-      );
-      await batch.commit();
+      await db().runTransaction(async (tx) => {
+        const current = (await tx.get(doc("requests", id))).data();
+        if (
+          !current ||
+          ![current.requesterId, current.reviewerId].includes(uid)
+        )
+          fail("permission-denied", "This request is private.");
+        if (!D.ACTIVE_STATUSES.includes(current!.status))
+          fail("failed-precondition", "This request is closed.");
+        const recipientId =
+          current!.requesterId === uid
+            ? current!.reviewerId
+            : current!.requesterId;
+        const [outgoing, incoming, deletion] = await tx.getAll(
+          doc("blocks", blockId(uid, recipientId)),
+          doc("blocks", blockId(recipientId, uid)),
+          doc("deletionJobs", recipientId),
+        );
+        if (outgoing.exists || incoming.exists || deletion.exists)
+          fail("permission-denied", "This collaboration is unavailable.");
+        tx.create(ref, message);
+        await notification(
+          tx,
+          recipientId,
+          "New review comment",
+          `${p.name} left feedback on “${current!.title}”.`,
+          `/requests/${id}`,
+          now,
+        );
+      });
       return message;
     }
     case "annotation.list": {
       const paperId = D.identifier(input.paperId);
-      await readablePaper(paperId, uid, true);
+      const paper = await readablePaper(paperId, uid, true);
+      const requestId = input.requestId ? D.identifier(input.requestId) : null;
+      if (requestId) {
+        const request = await participantRequest(requestId, uid);
+        if (request.paperId !== paperId)
+          fail(
+            "permission-denied",
+            "This request belongs to a different manuscript.",
+          );
+        await ensureUnblocked(request.requesterId, request.reviewerId);
+        if (
+          !D.ACTIVE_STATUSES.includes(request.status) &&
+          paper.ownerId !== uid
+        )
+          fail(
+            "permission-denied",
+            "This request is no longer shared with you.",
+          );
+      }
+      const base = db()
+        .collection("annotations")
+        .where("paperId", "==", paperId);
+      const records = requestId
+        ? (
+            await Promise.all([
+              base
+                .where("requestId", "==", requestId)
+                .orderBy("createdAt", "desc")
+                .limit(500)
+                .get(),
+              base
+                .where("authorId", "==", uid)
+                .where("visibility", "==", "private")
+                .orderBy("createdAt", "desc")
+                .limit(500)
+                .get(),
+            ])
+          ).flatMap(rows)
+        : rows(await base.orderBy("createdAt", "desc").limit(500).get());
       return sorted(
-        rows(
-          await db()
-            .collection("annotations")
-            .where("paperId", "==", paperId)
-            .orderBy("createdAt", "desc")
-            .limit(500)
-            .get(),
-        ),
+        [...new Map(records.map((r: any) => [r.id, r])).values()],
         500,
       )
-        .filter((a: any) => a.authorId === uid || a.visibility === "shared")
-        .map((a: any) => ({ ...a, paperVersion: a.paperVersion || 1 }));
+        .filter((a: any) =>
+          requestId
+            ? (a.requestId === requestId &&
+                (a.authorId === uid || a.visibility === "shared")) ||
+              (!a.requestId && a.authorId === uid && a.visibility === "private")
+            : a.authorId === uid || (!a.requestId && a.visibility === "shared"),
+        )
+        .map((a: any) => ({
+          ...a,
+          paperVersion: a.paperVersion || 1,
+          requestId: a.requestId || null,
+          replies: a.replies || [],
+          resolved: a.resolved === true,
+        }));
     }
     case "annotation.save": {
       const paperId = D.identifier(input.paperId);
       await readablePaper(paperId, uid, true);
+      const author = await profile(uid);
       const id = input.id
         ? D.identifier(input.id)
         : db().collection("annotations").doc().id;
@@ -877,6 +1079,38 @@ async function dispatchApi(
         if (!paper || paper.deleting)
           fail("not-found", "This manuscript is no longer available.");
         const version = paper!.version || 1;
+        const oldRequestId = previous.data()?.requestId || null;
+        const requestId =
+          input.requestId === undefined
+            ? oldRequestId
+            : input.requestId
+              ? D.identifier(input.requestId)
+              : null;
+        if (previous.exists && requestId !== oldRequestId)
+          fail(
+            "failed-precondition",
+            "A note cannot be moved to another collaboration. Add a new note instead.",
+          );
+        if (requestId) {
+          const request = (await tx.get(doc("requests", requestId))).data();
+          if (
+            !request ||
+            request.paperId !== paperId ||
+            ![request.requesterId, request.reviewerId].includes(uid)
+          )
+            fail(
+              "permission-denied",
+              "This note belongs to a private collaboration.",
+            );
+          if (!D.ACTIVE_STATUSES.includes(request!.status))
+            fail("failed-precondition", "This collaboration is closed.");
+          const blocks = await tx.getAll(
+            doc("blocks", blockId(request!.requesterId, request!.reviewerId)),
+            doc("blocks", blockId(request!.reviewerId, request!.requesterId)),
+          );
+          if (blocks.some((b) => b.exists))
+            fail("permission-denied", "This collaboration is unavailable.");
+        }
         if (
           input.paperVersion !== undefined &&
           (!Number.isInteger(input.paperVersion) ||
@@ -914,6 +1148,15 @@ async function dispatchApi(
             previous.data()?.paperId !== paperId)
         )
           fail("permission-denied", "You can edit only your notes.");
+        if (
+          authToken.email_verified !== true &&
+          (input.visibility === "shared" ||
+            previous.data()?.visibility === "shared")
+        )
+          fail(
+            "failed-precondition",
+            "Verify your email address before creating or editing a shared note.",
+          );
         const colors = ["yellow", "green", "blue", "pink", "purple"];
         const color = colors.includes(input.color) ? input.color : "yellow";
         const rects = Array.isArray(input.rects)
@@ -929,6 +1172,14 @@ async function dispatchApi(
           paperId,
           paperVersion: version,
           authorId: uid,
+          authorName: author.name,
+          requestId,
+          replies: previous.data()?.replies || [],
+          replyAuthorIds: previous.data()?.replyAuthorIds || [],
+          resolved: previous.data()?.resolved === true,
+          resolvedBy: previous.data()?.resolvedBy || null,
+          resolvedByName: previous.data()?.resolvedByName || null,
+          resolvedAt: previous.data()?.resolvedAt || null,
           page: Math.floor(D.number(input.page, "Page", 1, 10000)),
           quote: D.text(input.quote, "Quote", 10000, false),
           body: D.text(input.body, "Note", 10000, false),
@@ -943,6 +1194,115 @@ async function dispatchApi(
         tx.set(doc("annotations", id), annotation);
         return annotation;
       });
+    }
+    case "annotation.reply":
+    case "annotation.resolve": {
+      const id = D.identifier(input.id),
+        author = await profile(uid);
+      if (
+        action === "annotation.resolve" &&
+        typeof input.resolved !== "boolean"
+      )
+        fail("invalid-argument", "Specify whether this note is resolved.");
+      const replyBody =
+        action === "annotation.reply"
+          ? D.text(input.body, "Reply", 5000)
+          : null;
+      const result = await db().runTransaction(async (tx) => {
+        const [noteSnapshot, tombstone] = await Promise.all([
+          tx.get(doc("annotations", id)),
+          tx.get(doc("deletionJobs", uid)),
+        ]);
+        const note = noteSnapshot.data();
+        if (!note || tombstone.exists)
+          fail("not-found", "This note is unavailable.");
+        const paper = (await tx.get(doc("papers", note!.paperId))).data();
+        if (!paper || paper.deleting)
+          fail("not-found", "This manuscript is unavailable.");
+        if ((note!.paperVersion || 1) !== (paper!.version || 1))
+          fail(
+            "failed-precondition",
+            "Notes on earlier revisions are archived and read-only.",
+          );
+        if (note!.visibility !== "shared" && note!.authorId !== uid)
+          fail("permission-denied", "This note is private.");
+        if (note!.requestId) {
+          const request = (
+            await tx.get(doc("requests", note!.requestId))
+          ).data();
+          if (
+            !request ||
+            request.paperId !== note!.paperId ||
+            ![request.requesterId, request.reviewerId].includes(uid)
+          )
+            fail(
+              "permission-denied",
+              "This note belongs to a private collaboration.",
+            );
+          if (!D.ACTIVE_STATUSES.includes(request!.status))
+            fail("failed-precondition", "This collaboration is closed.");
+          const blocks = await tx.getAll(
+            doc("blocks", blockId(request!.requesterId, request!.reviewerId)),
+            doc("blocks", blockId(request!.reviewerId, request!.requesterId)),
+          );
+          if (blocks.some((b) => b.exists))
+            fail("permission-denied", "This collaboration is unavailable.");
+        } else if (paper!.ownerId !== uid) {
+          const [requests, a, b] = await Promise.all([
+            tx.get(
+              db()
+                .collection("requests")
+                .where("paperId", "==", note!.paperId)
+                .where("reviewerId", "==", uid),
+            ),
+            tx.get(doc("blocks", blockId(uid, paper!.ownerId))),
+            tx.get(doc("blocks", blockId(paper!.ownerId, uid))),
+          ]);
+          if (
+            a.exists ||
+            b.exists ||
+            !requests.docs.some((r) =>
+              D.ACTIVE_STATUSES.includes(r.data().status),
+            )
+          )
+            fail(
+              "permission-denied",
+              "This manuscript is no longer shared with you.",
+            );
+        }
+        const now = Date.now();
+        const patch: any = { updatedAt: now };
+        if (action === "annotation.reply") {
+          const replies = note!.replies || [];
+          if (replies.length >= 50)
+            fail(
+              "resource-exhausted",
+              "This note has reached its 50-reply limit. Continue in the request discussion.",
+            );
+          patch.replies = [
+            ...replies,
+            {
+              id: randomUUID(),
+              authorId: uid,
+              authorName: author.name,
+              body: replyBody,
+              createdAt: now,
+            },
+          ];
+          patch.replyAuthorIds = [
+            ...new Set(patch.replies.map((r: any) => r.authorId)),
+          ];
+        } else
+          Object.assign(patch, {
+            resolved: input.resolved,
+            resolvedBy: input.resolved ? uid : null,
+            resolvedByName: input.resolved ? author.name : null,
+            resolvedAt: input.resolved ? now : null,
+          });
+        tx.update(noteSnapshot.ref, patch);
+        return { ...note, id, ...patch };
+      });
+      return result;
     }
     case "annotation.delete": {
       const id = D.identifier(input.id);
@@ -979,7 +1339,41 @@ async function dispatchApi(
         return query.limit(limit).get();
       };
       let all: any[];
-      if (input.following === true) {
+      if (
+        [
+          input.following === true,
+          input.saved === true,
+          !!input.authorId,
+        ].filter(Boolean).length > 1
+      )
+        fail("invalid-argument", "Choose one feed filter at a time.");
+      if (input.saved === true) {
+        const bookmarks = await db()
+          .collection("savedPosts")
+          .where("userId", "==", uid)
+          .orderBy("createdAt", "desc")
+          .limit(100)
+          .get();
+        const ids = bookmarks.docs.map((d) => d.data().postId as string);
+        const posts = ids.length
+          ? await db().getAll(...ids.map((id) => doc("posts", id)))
+          : [];
+        all = rows({ docs: posts.filter((p) => p.exists) });
+        if (cursor)
+          all = all.filter(
+            (p) =>
+              p.createdAt < cursor.createdAt ||
+              (p.createdAt === cursor.createdAt && p.id < cursor.id),
+          );
+      } else if (input.authorId) {
+        const authorId = D.identifier(input.authorId);
+        await ensureUnblocked(uid, authorId);
+        all = rows(
+          await page(
+            db().collection("posts").where("authorId", "==", authorId),
+          ),
+        );
+      } else if (input.following === true) {
         // Creation caps follows at 300: at most ten 30-author queries and 1,000 post reads.
         // Existing imports beyond that supported cap are bounded to the first 300 follows.
         const following = await db()
@@ -1003,7 +1397,12 @@ async function dispatchApi(
         all = (await Promise.all(batches)).flatMap(rows);
       } else all = rows(await page(db().collection("posts")));
       all = all
-        .filter((p: any) => !blocked.has(p.authorId))
+        .filter(
+          (p: any) =>
+            !blocked.has(p.authorId) &&
+            !p.deleting &&
+            (p.visibility !== "private" || p.authorId === uid),
+        )
         .sort(
           (a, b) =>
             b.createdAt - a.createdAt ||
@@ -1014,78 +1413,152 @@ async function dispatchApi(
       const likes = await db().getAll(
         ...all.map((p) => doc("likes", hash(`${uid}:${p.id}`))),
       );
-      return all.map((p, index) => ({
-        ...publicPost(p),
-        liked: likes[index].exists,
-      }));
+      return Promise.all(
+        all.map((p, index) => postDTO(p, uid, likes[index].exists)),
+      );
     }
-    case "feed.get": {
-      const id = D.identifier(input.id);
-      const post = await required("posts", id);
-      await ensureUnblocked(uid, post.authorId);
-      const like = await doc("likes", hash(`${uid}:${id}`)).get();
-      return { ...publicPost(post), liked: like.exists };
+    case "feed.get":
+      return postDTO(await readablePost(D.identifier(input.id), uid), uid);
+    case "feed.post":
+    case "feed.edit": {
+      const author = await profile(uid);
+      const id =
+        action === "feed.edit"
+          ? D.identifier(input.id)
+          : db().collection("posts").doc().id;
+      let oldIds: string[] = [];
+      const saved = await db().runTransaction(async (tx) => {
+        const [existing, tombstone] = await Promise.all([
+          tx.get(doc("posts", id)),
+          tx.get(doc("deletionJobs", uid)),
+        ]);
+        const previous = existing.data();
+        if (tombstone.exists)
+          fail("failed-precondition", "This account is being deleted.");
+        if (action === "feed.edit" && (!previous || previous.authorId !== uid))
+          fail("permission-denied", "You can edit only your posts.");
+        const nextType = input.postType ?? previous?.postType ?? "update";
+        if (!["update", "question", "paper", "milestone"].includes(nextType))
+          fail("invalid-argument", "Choose a valid post type.");
+        const nextIds =
+          input.mediaIds === undefined
+            ? previous?.mediaIds || []
+            : mediaIds(input.mediaIds);
+        const paperId =
+          input.paperId === undefined
+            ? previous?.paperId || null
+            : input.paperId
+              ? D.identifier(input.paperId)
+              : null;
+        let paperTitle = null;
+        if (paperId) {
+          const paper = (await tx.get(doc("papers", paperId))).data();
+          if (!paper || paper.ownerId !== uid || paper.visibility !== "public")
+            fail(
+              "failed-precondition",
+              "Only your public manuscripts can be linked to a community post.",
+            );
+          paperTitle = paper!.title;
+        }
+        oldIds = previous?.mediaIds || [];
+        const applyMedia = await prepareMediaClaim(
+          tx,
+          uid,
+          nextIds,
+          oldIds,
+          "post",
+          id,
+        );
+        const visibility = input.visibility ?? previous?.visibility ?? "public";
+        if (!["public", "private"].includes(visibility))
+          fail("invalid-argument", "Choose public or private visibility.");
+        const now = Date.now();
+        const post = {
+          id,
+          authorId: uid,
+          authorName: author.name,
+          authorHeadline: author.headline || "",
+          body: D.text(input.body ?? previous?.body, "Post", 10000),
+          postType: nextType,
+          visibility,
+          mediaIds: nextIds,
+          paperId,
+          paperTitle,
+          arxivUrl: D.arxivUrl(input.arxivUrl ?? previous?.arxivUrl),
+          likeCount: previous?.likeCount || 0,
+          commentCount: previous?.commentCount || 0,
+          createdAt: previous?.createdAt || now,
+          updatedAt: now,
+          editedAt: previous ? now : null,
+        };
+        applyMedia();
+        tx.set(doc("posts", id), post);
+        return post;
+      });
+      await Promise.all(
+        oldIds
+          .filter((id) => !saved.mediaIds.includes(id))
+          .map((id) => purgeMedia(id).catch(() => false)),
+      );
+      return postDTO(saved, uid);
     }
-    case "feed.post": {
-      const p = await profile(uid);
-      const body = D.text(input.body, "Post", 10000);
-      const paperId = input.paperId ? D.identifier(input.paperId) : null;
-      let paperTitle = null;
-      if (paperId) {
-        const paper = await required("papers", paperId);
-        if (paper.ownerId !== uid || paper.visibility !== "public")
+    case "feed.save": {
+      const id = D.identifier(input.id),
+        ref = doc("savedPosts", hash(`${uid}:${id}`));
+      return db().runTransaction(async (tx) => {
+        const existing = await tx.get(ref);
+        if (existing.exists) {
+          tx.delete(ref);
+          return { saved: false };
+        }
+        const post = (await tx.get(doc("posts", id))).data();
+        if (
+          !post ||
+          post.deleting ||
+          (post.visibility === "private" && post.authorId !== uid)
+        )
+          fail("not-found", "This post is unavailable.");
+        const [outgoing, incoming, saved] = await Promise.all([
+          tx.get(doc("blocks", blockId(uid, post!.authorId))),
+          tx.get(doc("blocks", blockId(post!.authorId, uid))),
+          tx.get(
+            db().collection("savedPosts").where("userId", "==", uid).limit(500),
+          ),
+        ]);
+        if (outgoing.exists || incoming.exists)
+          fail("permission-denied", "This post is unavailable.");
+        if (saved.size >= 500)
           fail(
-            "failed-precondition",
-            "Only your public manuscripts can be attached to a feed post.",
+            "resource-exhausted",
+            "You can save up to 500 posts. Remove a saved post before adding another.",
           );
-        paperTitle = paper.title;
-      }
-      const ref = db().collection("posts").doc();
-      const post = {
-        id: ref.id,
-        authorId: uid,
-        authorName: p.name,
-        authorHeadline: p.headline,
-        body,
-        paperId,
-        paperTitle,
-        arxivUrl: D.arxivUrl(input.arxivUrl),
-        likeCount: 0,
-        commentCount: 0,
-        createdAt: Date.now(),
-      };
-      await ref.create(post);
-      return post;
+        tx.create(ref, { userId: uid, postId: id, createdAt: Date.now() });
+        return { saved: true };
+      });
     }
     case "feed.like": {
       const id = D.identifier(input.id);
-      const post = await required("posts", id);
-      await ensureUnblocked(uid, post.authorId);
+      const post = await readablePost(id, uid);
       const like = doc("likes", hash(`${uid}:${id}`));
       return db().runTransaction(async (tx) => {
         const [l, p] = await Promise.all([
           tx.get(like),
-          tx.get(doc("posts", id)),
+          transactionReadablePost(tx, id, uid),
         ]);
-        if (!p.exists) fail("not-found", "Post removed.");
         const liked = !l.exists;
         if (liked)
           tx.create(like, { userId: uid, postId: id, createdAt: Date.now() });
         else tx.delete(like);
-        const likeCount = Math.max(
-          0,
-          (p.data()?.likeCount || 0) + (liked ? 1 : -1),
-        );
+        const likeCount = Math.max(0, (p.likeCount || 0) + (liked ? 1 : -1));
         tx.update(doc("posts", id), { likeCount });
         return { liked, likeCount };
       });
     }
     case "feed.comments": {
       const id = D.identifier(input.id);
-      const post = await required("posts", id);
-      await ensureUnblocked(uid, post.authorId);
+      const post = await readablePost(id, uid);
       const blocked = await hiddenUsers(uid);
-      return sorted(
+      const comments = sorted(
         rows(
           await db()
             .collection("postComments")
@@ -1098,11 +1571,16 @@ async function dispatchApi(
       )
         .reverse()
         .filter((c: any) => !blocked.has(c.authorId));
+      return Promise.all(
+        comments.map(async (c) => ({
+          ...c,
+          authorAvatarUrl: await avatarUrl(c.authorId, uid),
+        })),
+      );
     }
     case "feed.comment": {
       const id = D.identifier(input.id);
-      const post = await required("posts", id);
-      await ensureUnblocked(uid, post.authorId);
+      const post = await readablePost(id, uid);
       const p = await profile(uid);
       const body = D.text(input.body, "Comment", 5000);
       const ref = db().collection("postComments").doc();
@@ -1114,27 +1592,50 @@ async function dispatchApi(
         body,
         createdAt: Date.now(),
       };
-      const batch = db().batch();
-      batch.create(ref, comment);
-      batch.update(doc("posts", id), { commentCount: FieldValue.increment(1) });
-      if (post.authorId !== uid)
-        await notification(
-          batch,
-          post.authorId,
-          "New comment",
-          `${p.name} commented on your post.`,
-          `/community#post-${id}`,
-          Date.now(),
-        );
-      await batch.commit();
-      return comment;
+      await db().runTransaction(async (tx) => {
+        const current = await transactionReadablePost(tx, id, uid);
+        tx.create(ref, comment);
+        tx.update(doc("posts", id), { commentCount: FieldValue.increment(1) });
+        if (current.authorId !== uid)
+          await notification(
+            tx,
+            current.authorId,
+            "New comment",
+            `${p.name} commented on your post.`,
+            `/community#post-${id}`,
+            Date.now(),
+          );
+      });
+      return { ...comment, authorAvatarUrl: await avatarUrl(uid, uid) };
     }
     case "feed.delete": {
       const id = D.identifier(input.id);
       const post = await required("posts", id);
       if (post.authorId !== uid)
         fail("permission-denied", "You can delete only your posts.");
-      await doc("posts", id).delete();
+      await db().runTransaction(async (tx) => {
+        const latest = (await tx.get(doc("posts", id))).data();
+        if (!latest || latest.authorId !== uid)
+          fail("permission-denied", "You can delete only your posts.");
+        const applyMedia = await prepareMediaClaim(
+          tx,
+          uid,
+          [],
+          latest!.mediaIds || [],
+          "post",
+          id,
+        );
+        applyMedia();
+        tx.delete(doc("posts", id));
+      });
+      await Promise.all(
+        (post.mediaIds || []).map((mediaId: string) =>
+          purgeMedia(mediaId).catch(() => false),
+        ),
+      );
+      await deleteQuery(
+        db().collection("savedPosts").where("postId", "==", id),
+      );
       await deleteQuery(
         db().collection("postComments").where("postId", "==", id),
       );
@@ -1195,13 +1696,15 @@ async function dispatchApi(
       return { following: rows(a), followers: rows(b) };
     }
     case "chat.list":
-      return rows(
-        await db()
-          .collection("chats")
-          .where("members", "array-contains", uid)
-          .orderBy("updatedAt", "desc")
-          .limit(100)
-          .get(),
+      return Promise.all(
+        rows(
+          await db()
+            .collection("chats")
+            .where("members", "array-contains", uid)
+            .orderBy("updatedAt", "desc")
+            .limit(100)
+            .get(),
+        ).map((chat: any) => chatDTO(chat, uid)),
       );
     case "chat.open": {
       const otherId = D.identifier(input.userId);
@@ -1213,7 +1716,7 @@ async function dispatchApi(
         fail("permission-denied", "This profile is private.");
       const id = pairId(uid, otherId);
       const ref = doc("chats", id);
-      return db().runTransaction(async (tx) => {
+      const opened = await db().runTransaction(async (tx) => {
         const snap = await tx.get(ref);
         if (snap.exists) return data(snap);
         const chat = {
@@ -1227,6 +1730,7 @@ async function dispatchApi(
         tx.create(ref, chat);
         return chat;
       });
+      return chatDTO(opened, uid);
     }
     case "chat.messages": {
       const id = D.identifier(input.id);
@@ -1422,6 +1926,8 @@ async function exportAccount(uid: string): Promise<any> {
     requestMessages: ["authorId"],
     chatMessages: ["authorId"],
     aiJobs: ["ownerId"],
+    media: ["ownerId"],
+    savedPosts: ["userId"],
   };
   const result: any = {
     exportedAt: new Date().toISOString(),
@@ -1438,6 +1944,16 @@ async function exportAccount(uid: string): Promise<any> {
       ...new Map(snaps.flatMap(rows).map((r: any) => [r.id, r])).values(),
     ];
   }
+  const repliedNotes = await db()
+    .collection("annotations")
+    .where("replyAuthorIds", "array-contains", uid)
+    .get();
+  result.annotationReplies = repliedNotes.docs.map((note) => ({
+    annotationId: note.id,
+    paperId: note.data().paperId,
+    requestId: note.data().requestId || null,
+    replies: (note.data().replies || []).filter((r: any) => r.authorId === uid),
+  }));
   result.aiSettings = data(await doc("aiSettings", uid).get());
   result.chats = rows(
     await db()
@@ -1494,6 +2010,9 @@ export async function deleteAccount(uid: string): Promise<boolean> {
       db().collection("postComments").where("postId", "==", p.id),
     );
     await deleteQuery(db().collection("likes").where("postId", "==", p.id));
+    await deleteQuery(
+      db().collection("savedPosts").where("postId", "==", p.id),
+    );
     await p.ref.delete();
   }
   const comments = await db()
@@ -1543,6 +2062,31 @@ export async function deleteAccount(uid: string): Promise<boolean> {
       updatedAt: Date.now(),
     });
   }
+  const repliedNotes = await db()
+    .collection("annotations")
+    .where("replyAuthorIds", "array-contains", uid)
+    .get();
+  for (const note of repliedNotes.docs)
+    await db().runTransaction(async (tx) => {
+      const current = (await tx.get(note.ref)).data();
+      if (!current) return;
+      const replies = (current.replies || []).filter(
+        (r: any) => r.authorId !== uid,
+      );
+      tx.update(note.ref, {
+        replies,
+        replyAuthorIds: [...new Set(replies.map((r: any) => r.authorId))],
+      });
+    });
+  const resolutions = await db()
+    .collection("annotations")
+    .where("resolvedBy", "==", uid)
+    .get();
+  for (const note of resolutions.docs)
+    await note.ref.update({
+      resolvedBy: "deleted",
+      resolvedByName: "Deleted account",
+    });
   const purge: Record<string, string[]> = {
     annotations: ["authorId"],
     requestMessages: ["authorId"],
@@ -1555,11 +2099,14 @@ export async function deleteAccount(uid: string): Promise<boolean> {
     aiJobs: ["ownerId"],
     aiKeys: ["ownerId"],
     aiRuns: ["userId"],
+    media: ["ownerId"],
+    savedPosts: ["userId"],
   };
   for (const [collection, fields] of Object.entries(purge))
     for (const field of fields)
       await deleteQuery(db().collection(collection).where(field, "==", uid));
   await getPaperBucket().deleteFiles({ prefix: `papers/${uid}/`, force: true });
+  await getPaperBucket().deleteFiles({ prefix: `media/${uid}/`, force: true });
   for (const collection of [
     "profiles",
     "users",
@@ -1568,6 +2115,7 @@ export async function deleteAccount(uid: string): Promise<boolean> {
     "aiUsage",
     "reviewerQuotas",
     "authEmailLimits",
+    "mediaUsage",
   ])
     await db().recursiveDelete(doc(collection, uid));
   try {

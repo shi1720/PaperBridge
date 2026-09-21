@@ -16,7 +16,8 @@ import { uploadManuscript } from "../lib/firebase";
 import { CATEGORIES } from "../lib/categories";
 import { PageHeading, Empty, Loading, ErrorBox, Modal, Tag } from "./ui";
 import { date } from "../lib/types";
-import { PdfReader, extractPdfText } from "./PdfReader";
+import { PdfReader, extractPdfManuscript } from "./PdfReader";
+import type { PdfAnalysis } from "../lib/pdf-analysis";
 export function Papers({ onAuth }: { onAuth: () => void }) {
   const { profile } = useApp();
   const [upload, setUpload] = useState(false);
@@ -108,14 +109,16 @@ export function Papers({ onAuth }: { onAuth: () => void }) {
     </>
   );
 }
-function UploadModal({
+export function UploadModal({
   open,
   onClose,
   existing,
+  onSaved,
 }: {
   open: boolean;
   onClose: () => void;
   existing?: any;
+  onSaved?: (paper: any) => void;
 }) {
   const { profile, demo, call, refresh, toast } = useApp();
   const navigate = useNavigate();
@@ -124,6 +127,7 @@ function UploadModal({
     file: File | null;
     storagePath: string;
     text: string;
+    pdfAnalysis?: PdfAnalysis;
   }>({ id: "", file: null, storagePath: "", text: "" });
   const [title, setTitle] = useState(""),
     [abstract, setAbstract] = useState(""),
@@ -145,6 +149,7 @@ function UploadModal({
         file: null,
         storagePath: existing?.storagePath || "",
         text: existing?.text || "",
+        pdfAnalysis: existing?.pdfAnalysis,
       };
       setError("");
     }
@@ -160,12 +165,15 @@ function UploadModal({
     const id = uploadDraft.current.id || existing?.id || crypto.randomUUID();
     try {
       let text = uploadDraft.current.text,
-        storagePath = uploadDraft.current.storagePath;
+        storagePath = uploadDraft.current.storagePath,
+        pdfAnalysis = uploadDraft.current.pdfAnalysis;
       if (file && file !== uploadDraft.current.file) {
         if (file.size > 20 * 1024 * 1024)
           throw new Error("Choose a PDF smaller than 20 MB.");
         setProgress("Reading your PDF…");
-        text = await extractPdfText(file);
+        const extracted = await extractPdfManuscript(file);
+        text = extracted.text;
+        pdfAnalysis = extracted.pdfAnalysis;
         if (!demo) {
           const uploaded = await uploadManuscript(file, id, (percent) =>
             setProgress(`Uploading ${percent}%`),
@@ -173,7 +181,7 @@ function UploadModal({
           storagePath = uploaded.storagePath;
         }
       }
-      uploadDraft.current = { id, file, text, storagePath };
+      uploadDraft.current = { id, file, text, storagePath, pdfAnalysis };
       setProgress("Saving your manuscript…");
       const paper = await call("paper.save", {
         paper: {
@@ -186,6 +194,7 @@ function UploadModal({
           storagePath,
           fileName: file?.name || existing?.fileName || "Demo manuscript",
           text,
+          ...(pdfAnalysis ? { pdfAnalysis } : {}),
           visibility: "private",
         },
       });
@@ -196,7 +205,8 @@ function UploadModal({
           : "Manuscript saved privately.",
       );
       onClose();
-      navigate("/papers/" + paper.id);
+      if (onSaved) onSaved(paper);
+      else navigate("/papers/" + paper.id);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -206,7 +216,9 @@ function UploadModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       title={
         existing ? "A stronger next version" : "Make room for your next idea"
       }

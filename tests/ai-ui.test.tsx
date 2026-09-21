@@ -137,3 +137,54 @@ it("shows extracted character counts from a paper summary without downloading ma
     fixtures.papers = [];
   }
 });
+
+it("shows coverage choices, five specialists, extraction blockers and bounded cost disclosure", () => {
+  fixtures.profile = { id: "author" };
+  fixtures.papers = [
+    {
+      id: "truncated",
+      title: "Partial extraction",
+      textCharacterCount: 100000,
+      pdfAnalysis: { totalPages: 150, scannedPages: 100, textTruncated: true },
+    },
+  ];
+  try {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/review?paper=truncated"]}>
+        <ReviewStudio onAuth={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("Full mode is unavailable");
+    expect(html).toContain("100 of 150 PDF pages scanned");
+    expect(html).toContain("Formatting &amp; structure");
+    expect(html).toContain("Submission readiness");
+    expect(html).toContain('aria-label="Review coverage"');
+    expect(html).toContain("No automatic paid retries");
+  } finally {
+    fixtures.profile = null;
+    fixtures.papers = [];
+  }
+});
+it("progress exposes failed-stage details while other stages are still running", () => {
+  const html = renderToStaticMarkup(
+    <ReviewResults
+      job={{
+        ...job,
+        status: "running",
+        errors: [],
+        stages: {
+          evidence: { status: "running" },
+          formatting: {
+            status: "failed",
+            error: { message: "Provider quota reached." },
+          },
+        },
+      }}
+      lens="formatting"
+      onLens={() => {}}
+    />,
+  );
+  expect(html).toContain('aria-label="Review stage progress"');
+  expect(html).toContain("Provider quota reached.");
+  expect(html).toContain("Export revision plan");
+});

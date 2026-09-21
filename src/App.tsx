@@ -185,7 +185,7 @@ export default function App() {
           <div className="account">
             {profile ? (
               <>
-                <Avatar name={profile.name} />
+                <Avatar src={profile.avatarUrl} name={profile.name} />
                 <div>
                   <strong>{profile.name}</strong>
                   <small>
@@ -246,7 +246,7 @@ export default function App() {
                   <Bell size={19} />
                   {notifications?.some((x: any) => !x.read) && <i />}
                 </button>
-                <Avatar name={profile.name} />
+                <Avatar src={profile.avatarUrl} name={profile.name} />
               </>
             ) : (
               <button
@@ -457,11 +457,17 @@ export default function App() {
             Manuscripts are private by default. The endorser you request can
             access the manuscript during an active request. Withdrawal stops new
             access links; existing download links expire within 10 minutes. A
-            recipient may have already downloaded a copy. Public posts and
-            published profile details are visible to the community. Private
-            messages and shared annotations are available to their participants
-            and authorized service operators. Private notes are not shown to
-            other researchers. Your email address is not published in the
+            recipient may have already downloaded a copy. Community post
+            attachments and profile photos are shared with signed-in members
+            according to their parent post or profile visibility. Access links
+            expire within ten minutes; downloaded copies cannot be recalled.
+            Public posts and published profile details are visible to the
+            community. Private messages and shared annotations are available to
+            their participants and authorized service operators. Private notes
+            are not shown to other researchers. Shared notes created within a
+            request are scoped to its author and selected researcher. The
+            request discussion and revision history stay in the app; email
+            provides notifications. Your email address is not published in the
             directory.
           </p>
           <h3>AI and your data</h3>

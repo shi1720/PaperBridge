@@ -24,11 +24,15 @@ import {
 import { useApp, useData } from "../lib/context";
 import { CATEGORIES } from "../lib/categories";
 import { PageHeading, Empty, Loading, ErrorBox, Modal, Tag } from "./ui";
-const agentNames: Record<string, string> = {
-  evidence: "Evidence lens",
-  originality: "Attribution lens",
-  reviewer: "Critical reader",
-};
+import { ProfilePhotoEditor } from "./ProfilePhotoEditor";
+import {
+  reviewAgents as agentNames,
+  reviewStages,
+  recommendedReviewModel,
+  modelReasoningOptions,
+  downloadReview,
+} from "../lib/ai-review";
+import "./ai-review.css";
 export function SettingsPage({ onAuth }: { onAuth: () => void }) {
   const { profile, call, refreshProfile, toast, demo, logout } = useApp();
   const [tab, setTab] = useState(
@@ -40,8 +44,22 @@ export function SettingsPage({ onAuth }: { onAuth: () => void }) {
     [busy, setBusy] = useState(false),
     [confirm, setConfirm] = useState(false),
     [deleteText, setDeleteText] = useState("");
+  const previousProfile = useRef(profile);
   useEffect(() => {
-    setForm(profile);
+    const before = previousProfile.current;
+    setForm((current: any) => {
+      if (!current || !profile || current.id !== profile.id) return profile;
+      // A separately saved photo must not discard an unfinished bio or headline.
+      const edited = Object.fromEntries(
+        Object.entries(current).filter(
+          ([key, value]) =>
+            !["avatarId", "avatarUrl"].includes(key) &&
+            JSON.stringify(value) !== JSON.stringify(before?.[key]),
+        ),
+      );
+      return { ...profile, ...edited };
+    });
+    previousProfile.current = profile;
   }, [profile]);
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -197,6 +215,7 @@ export function SettingsPage({ onAuth }: { onAuth: () => void }) {
       ) : (
         <form className="settings-layout" onSubmit={save}>
           <section className="panel form">
+            <ProfilePhotoEditor />
             <h2>The person behind the research</h2>
             <div className="form-grid">
               <label>
@@ -650,7 +669,47 @@ function AISettings() {
             </div>
           ))}
         </div>
-        <h3>Three lenses, one stronger paper</h3>
+        <div className="ai-recommendation">
+          <h3>Five specialists, one revision plan</h3>
+          <p>
+            Recommended: GPT-6 Astra with medium reasoning. Model choices are
+            explicit and never silently replaced.
+          </p>
+          <button
+            className="button"
+            disabled={
+              demo ||
+              busy ||
+              !models.openai?.models.some(
+                (m) => m.id === recommendedReviewModel,
+              )
+            }
+            onClick={() =>
+              setAgents(
+                Object.fromEntries(
+                  Object.keys(agentNames).map((id) => [
+                    id,
+                    {
+                      provider: "openai",
+                      model: recommendedReviewModel,
+                      reasoningEffort: "medium",
+                    },
+                  ]),
+                ),
+              )
+            }
+          >
+            <Sparkles size={16} /> Use GPT-6 Astra · medium for all specialists
+          </button>
+          {!models.openai?.models.some(
+            (m) => m.id === recommendedReviewModel,
+          ) && (
+            <small>
+              Connect OpenAI and refresh its catalog to confirm Astra access.
+              You can choose other available models below.
+            </small>
+          )}
+        </div>
         {Object.entries(agentNames).map(([id, name]) => {
           const p = agents[id]?.provider || "openai";
           const available = models[p]?.models || [];
@@ -690,7 +749,13 @@ function AISettings() {
                     onChange={(e) =>
                       setAgents({
                         ...agents,
-                        [id]: { provider: p, model: e.target.value },
+                        [id]: {
+                          provider: p,
+                          model: e.target.value,
+                          ...(modelReasoningOptions(p, e.target.value).length
+                            ? { reasoningEffort: "medium" }
+                            : {}),
+                        },
                       })
                     }
                   >
@@ -719,6 +784,44 @@ function AISettings() {
                   </select>
                 </label>
               </div>
+              {modelReasoningOptions(p, agents[id]?.model || "").length > 0 && (
+                <label>
+                  Reasoning effort for {name}
+                  <select
+                    aria-label={`Reasoning effort for ${name}`}
+                    value={agents[id]?.reasoningEffort || "medium"}
+                    disabled={busy || demo}
+                    onChange={(e) =>
+                      setAgents({
+                        ...agents,
+                        [id]: {
+                          ...agents[id],
+                          reasoningEffort: e.target.value,
+                        },
+                      })
+                    }
+                  >
+                    {modelReasoningOptions(p, agents[id].model).map(
+                      (effort) => (
+                        <option key={effort} value={effort}>
+                          {effort}
+                          {effort === "medium" ? " · recommended" : ""}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                  <small>
+                    Higher effort can increase latency and cost. The review
+                    keeps a fixed time and output budget.
+                  </small>
+                </label>
+              )}
+              {!modelReasoningOptions(p, agents[id]?.model || "").length && (
+                <small>
+                  Provider default reasoning. Explicit effort controls are
+                  supported for GPT-6 Astra.
+                </small>
+              )}
             </div>
           );
         })}
@@ -743,11 +846,12 @@ function AISettings() {
           Save model choices
         </button>
         <p className="fine-print">
-          Synthesis uses the Critical reader model. All three selections must be
-          available in your connected provider catalogs.
+          Synthesis uses the Methods & robustness model and reasoning effort.
+          All five selections must be available in your connected provider
+          catalogs.
         </p>
       </section>
-      <aside className="rail-card">
+      <aside className="rail-card" aria-label="AI key security and billing">
         <ShieldCheck size={25} />
         <h3>Keys stay private.</h3>
         <p>
@@ -761,10 +865,11 @@ function AISettings() {
           on the provider.
         </p>
         <p className="fine-print">
-          Each review makes four model calls. Set spending limits in your
-          provider account. You can remove a key at any time. Provider data
-          policies apply; encryption does not prevent the provider from
-          receiving the text you consent to review.
+          Each complete review makes six model calls, with up to three
+          specialists running concurrently. Set spending limits in your provider
+          account. You can remove a key at any time. Provider data policies
+          apply; encryption does not prevent the provider from receiving the
+          text you consent to review.
         </p>
       </aside>
     </div>
@@ -777,6 +882,7 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
   const [paperId, setPaperId] = useState(params.get("paper") || ""),
     [consent, setConsent] = useState(false),
     [lookup, setLookup] = useState(false),
+    [coverageMode, setCoverageMode] = useState<"full" | "partial">("full"),
     [busy, setBusy] = useState(false),
     [job, setJob] = useState<any>(null),
     [error, setError] = useState(""),
@@ -785,6 +891,7 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
       requestId: string;
       paperId: string;
       allowMetadataLookup: boolean;
+      coverageMode: "full" | "partial";
       jobId: string;
     } | null>(null);
   const runGuard = useRef(false);
@@ -830,17 +937,29 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
         : {
             paperId,
             allowMetadataLookup: lookup,
+            coverageMode,
             requestId,
             jobId: Array.from(new Uint8Array(hash))
               .map((b) => b.toString(16).padStart(2, "0"))
               .join(""),
           };
     setPending(request);
+    setJob({
+      id: request.jobId,
+      title: selected?.title || "Research review",
+      status: "running",
+      createdAt: Date.now(),
+      results: {},
+      stages: Object.fromEntries(
+        reviewStages.map((id) => [id, { status: "pending" }]),
+      ),
+    });
     try {
       const result = await call("ai.review", {
         paperId: request.paperId,
         allowMetadataLookup: request.allowMetadataLookup,
         requestId: request.requestId,
+        coverageMode: request.coverageMode,
         consent: true,
       });
       receive(result);
@@ -864,7 +983,10 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
         "resource-exhausted",
         "not-found",
       ].some((code) => String(e.code || "").endsWith(code));
-      if (rejectedBeforeStart) setPending(null);
+      if (rejectedBeforeStart) {
+        setPending(null);
+        setJob(null);
+      }
       setError(
         e.message +
           (rejectedBeforeStart
@@ -923,11 +1045,29 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
     {
       id: "reviewer",
       Icon: MessageSquare,
-      name: "Critical reader",
+      name: "Methods & robustness",
       label: "What would a reviewer ask?",
       description:
-        "Challenge the method, surface limitations, and sharpen the argument.",
+        "Inspect design, statistics, reproducibility, assumptions, and robustness.",
       color: "orange",
+    },
+    {
+      id: "formatting",
+      Icon: BookOpen,
+      name: "Formatting & structure",
+      label: "Can a reader follow it?",
+      description:
+        "Check headings, references, notation, and PDF extraction diagnostics. Visual layout still needs human inspection.",
+      color: "green",
+    },
+    {
+      id: "readiness",
+      Icon: Check,
+      name: "Submission readiness",
+      label: "What needs work before sharing?",
+      description:
+        "Check the abstract, contribution, limitations, and reporting for a coherent submission. This is not acceptance certification.",
+      color: "purple",
     },
   ];
   return (
@@ -935,7 +1075,7 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
       <PageHeading
         eyebrow="A FRESH PERSPECTIVE ON YOUR WORK"
         title="Think deeper. Revise with purpose."
-        description="Three research lenses. Evidence you can inspect. Your own models and API keys."
+        description="Five specialists inspect your extracted text. One prioritized revision plan, with quotes and concrete next steps."
         action={
           <Link to="/settings?tab=ai" className="button">
             <KeyRound size={16} />
@@ -943,21 +1083,29 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
           </Link>
         }
       />
-      <div className="review-lenses">
-        {lenses.map(({ id, Icon, name, label, description, color }, index) => (
-          <article key={id} className={"lens-card " + color}>
-            <div className="lens-icon">
-              <Icon size={23} />
-            </div>
-            <span className="overline">{name}</span>
-            <h3>{label}</h3>
-            <p>{description}</p>
-            <span className="lens-number" aria-hidden="true">
-              0{index + 1}
-            </span>
-          </article>
-        ))}
-      </div>
+      <details className="ai-specialist-details">
+        <summary>
+          Five specialists: evidence, attribution, methods, formatting, and
+          readiness
+        </summary>
+        <div className="review-lenses">
+          {lenses.map(
+            ({ id, Icon, name, label, description, color }, index) => (
+              <article key={id} className={"lens-card " + color}>
+                <div className="lens-icon">
+                  <Icon size={23} />
+                </div>
+                <span className="overline">{name}</span>
+                <h3>{label}</h3>
+                <p>{description}</p>
+                <span className="lens-number" aria-hidden="true">
+                  0{index + 1}
+                </span>
+              </article>
+            ),
+          )}
+        </div>
+      </details>
       {!profile ? (
         <Empty
           title="Your private review studio"
@@ -982,7 +1130,7 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
             {settings.error && <ErrorBox message={settings.error} />}{" "}
             {!demo && !settings.loading && !configured && (
               <p className="notice">
-                Connect a provider key and save all three review models in{" "}
+                Connect a provider key and save all five review models in{" "}
                 <Link to="/settings?tab=ai">AI settings</Link> first.
               </p>
             )}
@@ -1013,12 +1161,56 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
                 Add your first manuscript <ArrowRight size={16} />
               </Link>
             )}
+            <label>
+              Review coverage
+              <select
+                aria-label="Review coverage"
+                value={coverageMode}
+                disabled={busy || !!pending}
+                onChange={(e) => {
+                  setCoverageMode(e.target.value as "full" | "partial");
+                  setConsent(false);
+                }}
+              >
+                <option value="full">
+                  Full extracted text · up to 100,000 characters
+                </option>
+                <option value="partial">
+                  Partial review · first 32,000 characters
+                </option>
+              </select>
+            </label>
             {selected && (
-              <p className="fine-print">
-                {selectedCharacterCount.toLocaleString()} extracted characters
-                available. At most the first 32,000 characters are reviewed;
-                images and PDF layout are excluded.
-              </p>
+              <div className="ai-coverage notice">
+                <strong>
+                  {selectedCharacterCount.toLocaleString()} extracted characters
+                  available
+                </strong>
+                <p>
+                  {coverageMode === "full"
+                    ? "All stored extracted text is supplied to each specialist. Known incomplete PDF extraction blocks full mode."
+                    : "Only the first 32,000 stored characters are supplied. Later content may be excluded."}
+                </p>
+                <p>
+                  {selected.pdfAnalysis
+                    ? `${selected.pdfAnalysis.scannedPages} of ${selected.pdfAnalysis.totalPages} PDF pages scanned${selected.pdfAnalysis.textTruncated ? "; extraction reached its text limit" : ""}.`
+                    : "Source PDF page coverage is unknown for this manuscript. Re-upload to capture extraction diagnostics."}{" "}
+                  Images and equations missing from extraction are not reviewed;
+                  layout metrics do not replace visual inspection.
+                </p>
+                {coverageMode === "full" &&
+                  (selectedCharacterCount > 100000 ||
+                    selected.pdfAnalysis?.textTruncated ||
+                    (selected.pdfAnalysis &&
+                      selected.pdfAnalysis.scannedPages <
+                        selected.pdfAnalysis.totalPages)) && (
+                    <p role="status">
+                      Full mode is unavailable for this extraction. Re-upload a
+                      complete text-readable manuscript or choose partial
+                      coverage explicitly.
+                    </p>
+                  )}
+              </div>
             )}
             {configured && (
               <div className="notice">
@@ -1027,9 +1219,15 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
                   <p key={id}>
                     {name}: {providers[settings.data.agents[id].provider]} ·{" "}
                     {settings.data.agents[id].model}
+                    {settings.data.agents[id].reasoningEffort
+                      ? ` · ${settings.data.agents[id].reasoningEffort} reasoning`
+                      : " · provider default"}
                   </p>
                 ))}
-                <small>Synthesis also uses the Critical reader model.</small>
+                <small>
+                  Synthesis uses the Methods & robustness model and reasoning
+                  effort.
+                </small>
               </div>
             )}
             <label className="checkbox-label">
@@ -1062,7 +1260,13 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
                 busy ||
                 !configured ||
                 job?.status === "running" ||
-                selectedCharacterCount < 100
+                selectedCharacterCount < 100 ||
+                (coverageMode === "full" &&
+                  (selectedCharacterCount > 100000 ||
+                    selected?.pdfAnalysis?.textTruncated ||
+                    (selected?.pdfAnalysis &&
+                      selected.pdfAnalysis.scannedPages <
+                        selected.pdfAnalysis.totalPages)))
               }
               onClick={run}
             >
@@ -1103,14 +1307,17 @@ export function ReviewStudio({ onAuth }: { onAuth: () => void }) {
             )}
             {error && <ErrorBox message={error} />}
             <p className="fine-print">
-              Four provider calls, each capped at 2,400 output tokens; up to 10
-              started reviews per day. These limits do not guarantee a dollar
-              price. Failed requests can still incur provider charges. AI
-              suggestions require human review; this is not comprehensive claim
-              verification, plagiarism detection, or an endorsement decision.
+              Up to six provider calls, capped at 12,000 output tokens for
+              OpenAI reasoning models and 6,000 otherwise; up to 10 started
+              reviews per day. Specialists run with concurrency three, with a
+              total time budget of 460 seconds. No automatic paid retries. These
+              limits do not guarantee a dollar price. Failed requests can still
+              incur provider charges. AI suggestions require human review; this
+              is not comprehensive claim verification, plagiarism detection, or
+              an endorsement decision.
             </p>
           </section>
-          <aside className="panel">
+          <aside className="panel" aria-label="Review history">
             <div className="panel-heading">
               <h3>Review history</h3>
               <button
@@ -1170,13 +1377,14 @@ export function ReviewResults({
   lens: string;
   onLens: (name: string) => void;
 }) {
-  const stages = ["synthesis", "evidence", "originality", "reviewer"];
+  const stages = ["synthesis", ...Object.keys(agentNames)];
   const sources = Array.isArray(job.metadata?.sources)
     ? job.metadata.sources
     : [];
   const errors = Array.isArray(job.errors) ? job.errors : [];
   const result = job.results?.[lens];
-  const failure = errors.find((e: any) => e.agent === lens);
+  const failure =
+    errors.find((e: any) => e.agent === lens) || job.stages?.[lens]?.error;
   return (
     <section className="panel review-results">
       <div className="panel-heading">
@@ -1188,7 +1396,21 @@ export function ReviewResults({
             {job.promptVersion || "version not recorded"}
           </p>
         </div>
-        <Tag>{job.status}</Tag>
+        <div className="button-row">
+          <Tag>{job.status}</Tag>
+          <button
+            className="button"
+            onClick={() => downloadReview(job, "markdown")}
+          >
+            <Download size={15} /> Export revision plan
+          </button>
+          <button
+            className="button"
+            onClick={() => downloadReview(job, "json")}
+          >
+            JSON
+          </button>
+        </div>
       </div>
       {job.status === "partial" && (
         <p className="notice">
@@ -1203,6 +1425,22 @@ export function ReviewResults({
           message={`${agentNames[e.agent] || "Synthesis"}: ${e.message} (${e.code})`}
         />
       ))}
+      {job.stages && (
+        <ol
+          className="ai-stage-progress"
+          aria-label="Review stage progress"
+          aria-live="polite"
+        >
+          {reviewStages.map((id) => (
+            <li key={id} data-status={job.stages[id]?.status || "pending"}>
+              <strong>
+                {id === "synthesis" ? "Revision plan" : agentNames[id]}
+              </strong>
+              <span>{job.stages[id]?.status || "pending"}</span>
+            </li>
+          ))}
+        </ol>
+      )}
       {job.scope && (
         <p className="notice">
           <strong>
@@ -1213,10 +1451,35 @@ export function ReviewResults({
           {Number(job.scope.reviewedCharacters || 0).toLocaleString()} of{" "}
           {Number(job.scope.totalCharacters || 0).toLocaleString()} extracted
           characters reviewed
-          {job.scope.truncated ? " (the first 32,000 characters)." : "."}{" "}
-          Figures, equations, and layout may be missing. This snapshot reflects
-          the manuscript at the time of the run.
+          {job.scope.truncated ? " (partial coverage)." : "."} Mode:{" "}
+          {job.scope.mode || "legacy"}. PDF pages scanned:{" "}
+          {job.scope.scannedPages ?? "unknown"} of{" "}
+          {job.scope.totalPages ?? "unknown"}; source coverage:{" "}
+          {job.scope.sourceCoverage || "unknown"}. Figures, equations, and
+          visual layout were not inspected. This snapshot reflects the
+          manuscript at the time of the run.
         </p>
+      )}
+      {job.pdfAnalysis && (
+        <details className="ai-pdf-diagnostics">
+          <summary>PDF extraction and formatting diagnostics</summary>
+          <p>
+            Deterministic PDF.js measurements, separate from model findings.
+            These are not visual inspection or venue compliance checks.
+          </p>
+          {job.pdfAnalysis.warnings?.length ? (
+            <ul>
+              {job.pdfAnalysis.warnings.map((w: string, i: number) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>
+              No extraction heuristics raised warnings. Inspect the rendered PDF
+              yourself.
+            </p>
+          )}
+        </details>
       )}
       <div className="tabs">
         {stages.map((l) => (
@@ -1225,7 +1488,7 @@ export function ReviewResults({
             className={lens === l ? "active" : ""}
             onClick={() => onLens(l)}
           >
-            {l === "synthesis" ? "Together, a clearer picture" : agentNames[l]}
+            {l === "synthesis" ? "Prioritized revision plan" : agentNames[l]}
             {errors.some((e: any) => e.agent === l) ? " · incomplete" : ""}
           </button>
         ))}
@@ -1242,6 +1505,7 @@ export function ReviewResults({
           <div className="button-row">
             <Tag>{providers[result.provider] || result.provider}</Tag>
             <Tag>{result.model}</Tag>
+            <Tag>{result.reasoningEffort || "provider default"} reasoning</Tag>
           </div>
           {result.usage && (
             <p className="fine-print">

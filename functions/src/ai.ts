@@ -19,6 +19,9 @@ import {
   manuscriptExcerpt,
   parseReview,
   provider,
+  normalizeConfig,
+  pdfDiagnostics,
+  runBounded,
 } from "./ai-core";
 export const aiEncryptionKey = defineSecret(
   "PAPERBRIDGE_AI_KEY_ENCRYPTION_KEY",
@@ -123,7 +126,7 @@ export async function handleAI(
         if (!c)
           throw new HttpsError(
             "invalid-argument",
-            "Configure all three review agents.",
+            "Configure all five review specialists.",
           );
         const p = provider(c.provider);
         if (!catalogs.has(p))
@@ -138,7 +141,11 @@ export async function handleAI(
             "invalid-argument",
             "Select a model available to your API key.",
           );
-        agents[name] = { provider: p, model: c.model };
+        agents[name] = normalizeConfig({
+          provider: p,
+          model: c.model,
+          reasoningEffort: c.reasoningEffort,
+        });
       }
       await db()
         .collection("aiSettings")
@@ -210,6 +217,14 @@ async function review(uid: string, data: any) {
   const ref = db().collection("aiJobs").doc(jobId),
     prior = await ref.get();
   if (prior.exists) {
+    if (
+      prior.data()!.scope?.mode &&
+      prior.data()!.scope.mode !== (data.coverageMode || "full")
+    )
+      throw new HttpsError(
+        "invalid-argument",
+        "Use a new request ID to change review coverage.",
+      );
     if (prior.data()!.paperId !== paperId)
       throw new HttpsError(
         "invalid-argument",
@@ -223,8 +238,20 @@ async function review(uid: string, data: any) {
       "permission-denied",
       "Only the manuscript owner may run an AI review.",
     );
-  const paper = paperDoc.data()!,
-    excerpt = manuscriptExcerpt(String(paper.text || ""));
+  const paper = paperDoc.data()!;
+  const mode = data.coverageMode === undefined ? "full" : data.coverageMode;
+  if (!["full", "partial"].includes(mode))
+    throw new HttpsError(
+      "invalid-argument",
+      "Choose full extracted text or partial coverage.",
+    );
+  const excerpt = manuscriptExcerpt(String(paper.text || ""), mode);
+  const pdfAnalysis = pdfDiagnostics(paper.pdfAnalysis);
+  if (mode === "full" && pdfAnalysis.sourceCoverage === "incomplete")
+    throw new HttpsError(
+      "failed-precondition",
+      "The source PDF extraction is incomplete. Re-upload a smaller or text-readable PDF, or explicitly choose partial coverage before starting.",
+    );
   if (excerpt.text.trim().length < 100)
     throw new HttpsError(
       "failed-precondition",
@@ -235,10 +262,11 @@ async function review(uid: string, data: any) {
   if (!AGENTS.every((n) => config?.[n]?.model))
     throw new HttpsError(
       "failed-precondition",
-      "Choose a provider and model for all three agents first.",
+      "Choose a provider and model for all five specialists first.",
     );
   const keys = new Map<Provider, string>();
   for (const a of AGENTS) {
+    config[a] = normalizeConfig(config[a]);
     const p = provider(config[a].provider);
     if (!keys.has(p)) keys.set(p, await readKey(uid, p));
   }
@@ -259,12 +287,32 @@ async function review(uid: string, data: any) {
       version: "2026-09-21",
     },
     agents: config,
-    scope: { ...excerpt, text: undefined },
+    scope: {
+      ...excerpt,
+      text: undefined,
+      sourceCoverage: pdfAnalysis.sourceCoverage,
+      totalPages: pdfAnalysis.totalPages ?? null,
+      scannedPages: pdfAnalysis.scannedPages ?? null,
+      sourceTextTruncated: pdfAnalysis.textTruncated ?? null,
+      visualInspection: false,
+    },
+    pdfAnalysis,
+    stages: Object.fromEntries(
+      [...AGENTS, "synthesis"].map((name) => [name, { status: "pending" }]),
+    ),
+    budget: {
+      calls: LIMITS.callsPerReview,
+      concurrency: LIMITS.concurrency,
+      providerTimeoutMs: LIMITS.providerTimeoutMs,
+      jobTimeoutMs: LIMITS.jobTimeoutMs,
+      outputTokens: LIMITS.outputTokens,
+      reasoningOutputTokens: LIMITS.reasoningOutputTokens,
+    },
     results: {},
     errors: [],
     inputHash: createHash("sha256").update(excerpt.text).digest("hex"),
     paperUpdatedAt: paper.updatedAt || null,
-    promptVersion: "2026-09-21.2",
+    promptVersion: "2026-09-21.3",
   };
   delete initial.scope.text;
   const created = await db().runTransaction(async (tx) => {
@@ -317,47 +365,99 @@ async function review(uid: string, data: any) {
       allowedSourceIds: [...sourceIds],
       metadataLimitations: metadata.limitations,
     };
-    for (const name of [...AGENTS, "synthesis"] as const) {
-      // Preserve useful completed stages when a later provider fails, and avoid pretending a synthesis exists.
+    const deadline = now + LIMITS.jobTimeoutMs;
+    async function runStage(name: (typeof AGENTS)[number] | "synthesis") {
       const selected = name === "synthesis" ? config.reviewer : config[name];
+      const startedAt = Date.now();
       try {
-        const priorAgents =
-          name === "reviewer" || name === "synthesis" ? results : {};
+        if (deadline - startedAt < 10000)
+          throw new ProviderError(
+            "time_budget",
+            "The review time budget was exhausted. Completed findings are retained; no automatic retry was made.",
+          );
+        await ref.update({
+          [`stages.${name}`]: { status: "running", startedAt },
+          updatedAt: startedAt,
+        });
         const response = await generate(
           selected,
           keys.get(selected.provider)!,
           PROMPTS[name],
-          JSON.stringify({ ...payload, priorAgents, priorStageErrors: errors }),
+          JSON.stringify({
+            ...payload,
+            pdfAnalysis,
+            priorAgents: name === "synthesis" ? results : {},
+            priorStageErrors: name === "synthesis" ? errors : [],
+          }),
+          Math.min(LIMITS.providerTimeoutMs, deadline - Date.now()),
         );
         const result = parseReview(response.text, excerpt.text, sourceIds);
         result.limitations.push(
           "AI findings require human review; no endorsement or scientific validity is guaranteed.",
         );
         result.limitations.push(
-          "Only extracted text was reviewed; figures, equations and PDF layout may be missing.",
+          "Review input included the extracted text within the declared scope. Images, visual layout, and equations not present in text were not inspected.",
         );
         if (excerpt.truncated)
           result.limitations.push(
-            `Only the first ${excerpt.reviewedCharacters} of ${excerpt.totalCharacters} characters were reviewed. Figures, equations and PDF layout may be missing from extracted text.`,
+            `Partial mode: only the first ${excerpt.reviewedCharacters} of ${excerpt.totalCharacters} stored characters were supplied.`,
+          );
+        if (pdfAnalysis.sourceCoverage !== "all_pages_scanned")
+          result.limitations.push(
+            "Complete source-PDF coverage is not established. See the extraction diagnostics.",
           );
         results[name] = {
           ...result,
           provider: selected.provider,
           model: response.model,
+          reasoningEffort: selected.reasoningEffort || "provider_default",
           usage: response.usage,
         };
+        // Independent field updates prevent concurrent stages from overwriting one another.
+        await ref.update({
+          [`results.${name}`]: results[name],
+          [`stages.${name}`]: {
+            status: "completed",
+            startedAt,
+            completedAt: Date.now(),
+          },
+          updatedAt: Date.now(),
+        });
       } catch (e) {
-        errors.push({
+        const error = {
           agent: name,
           code: e instanceof ProviderError ? e.code : "failed",
           message:
             e instanceof ProviderError
               ? e.message
               : "This review stage could not be completed.",
+        };
+        errors.push(error);
+        await ref.update({
+          [`stages.${name}`]: {
+            status: "failed",
+            startedAt,
+            completedAt: Date.now(),
+            error,
+          },
+          updatedAt: Date.now(),
         });
       }
-      await ref.update({ results, errors, updatedAt: Date.now() });
     }
+    await runBounded(AGENTS, LIMITS.concurrency, runStage);
+    if (Object.keys(results).length) await runStage("synthesis");
+    else {
+      errors.push({
+        agent: "synthesis",
+        code: "no_specialist_results",
+        message:
+          "Synthesis was skipped because no specialist completed. No synthesis call was charged.",
+      });
+      await ref.update({
+        "stages.synthesis": { status: "skipped", completedAt: Date.now() },
+      });
+    }
+    await ref.update({ errors, updatedAt: Date.now() });
     const status = errors.length
       ? Object.keys(results).length
         ? "partial"

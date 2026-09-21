@@ -109,3 +109,86 @@ export async function uploadManuscript(
     request.send(file);
   });
 }
+
+export const MEDIA_LIMITS = {
+  avatar: 5 * 1024 * 1024,
+  image: 8 * 1024 * 1024,
+  pdf: 20 * 1024 * 1024,
+  count: 4,
+};
+export function validateMediaFile(
+  file: Pick<File, "type" | "size">,
+  purpose: "avatar" | "community",
+) {
+  const image = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
+  if (!image && !(purpose === "community" && file.type === "application/pdf"))
+    throw new Error(
+      purpose === "avatar"
+        ? "Choose a JPEG, PNG, or WebP image."
+        : "Choose a JPEG, PNG, WebP image, or PDF.",
+    );
+  const max =
+    purpose === "avatar"
+      ? MEDIA_LIMITS.avatar
+      : image
+        ? MEDIA_LIMITS.image
+        : MEDIA_LIMITS.pdf;
+  if (!file.size || file.size > max)
+    throw new Error(
+      `Choose a ${image ? "photo" : "PDF"} between 1 byte and ${max / 1024 / 1024} MiB.`,
+    );
+}
+export async function uploadMedia(
+  file: File,
+  purpose: "avatar" | "community",
+  onProgress?: (percent: number) => void,
+): Promise<import("./types").MediaAsset> {
+  validateMediaFile(file, purpose);
+  if (!auth.currentUser)
+    throw new Error("Sign in with a real account to upload files.");
+  const token = await auth.currentUser.getIdToken();
+  const functionName =
+    env.VITE_MEDIA_UPLOAD_FUNCTION_NAME || "paperbridgeUploadMedia";
+  const projectId = app.options.projectId;
+  const base =
+    env.VITE_MEDIA_UPLOAD_URL ||
+    (env.VITE_USE_EMULATORS === "true"
+      ? `http://127.0.0.1:5001/${projectId}/us-central1/${functionName}`
+      : `https://us-central1-${projectId}.cloudfunctions.net/${functionName}`);
+  const url = new URL(base);
+  url.searchParams.set("purpose", purpose);
+  url.searchParams.set("fileName", file.name);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.timeout = 120000;
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable)
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () =>
+      reject(
+        new Error("Upload interrupted. Check your connection and try again."),
+      );
+    xhr.ontimeout = () =>
+      reject(new Error("Upload timed out. Please try again."));
+    xhr.onload = () => {
+      try {
+        const result = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300 && result?.data?.id)
+          resolve(result.data);
+        else
+          reject(
+            new Error(
+              result?.error?.message || "This file could not be uploaded.",
+            ),
+          );
+      } catch {
+        reject(new Error("The upload server returned an invalid response."));
+      }
+    };
+    xhr.send(file);
+  });
+}
