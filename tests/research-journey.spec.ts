@@ -188,6 +188,12 @@ test("two researchers complete a private manuscript and endorsement conversation
     .getByRole("button", { name: "Start reviewing", exact: true })
     .click();
   await reviewer.getByRole("button", { name: "Confirm update" }).click();
+  // Wait for the status mutation and its refreshed view before editing the
+  // conversation behind the modal. A fast fill can otherwise target the old DOM.
+  await expect(reviewer.getByRole("dialog")).not.toBeVisible();
+  await expect(reviewer.locator(".status-badge").first()).toContainText(
+    "In review",
+  );
   await reviewer
     .getByLabel("Review comment")
     .fill("Please report a stronger baseline and an uncertainty interval.");
