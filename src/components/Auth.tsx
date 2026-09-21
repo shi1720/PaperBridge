@@ -73,7 +73,7 @@ export function AuthModal({
         });
         await call("auth.sendVerification");
         toast(
-          "Account created. Verification email queued; check your inbox shortly.",
+          "Account created. Verification email queued; check your inbox and spam folder shortly.",
         );
         await finish();
       }

@@ -1,0 +1,59 @@
+{
+  "date": "2026-09-21",
+  "transport": "Brevo Free SMTP over required STARTTLS",
+  "environment": "Deployed Firestore-triggered email worker in isolated production database",
+  "smtpAccepted": 6,
+  "firstAttemptAccepted": 6,
+  "recipientMailboxes": "Two owner-controlled Gmail aliases",
+  "messages": [
+    {
+      "recipientRole": "endorser",
+      "subject": "PaperBridge: withdrew the request",
+      "mailboxPlacement": "INBOX"
+    },
+    {
+      "recipientRole": "researcher",
+      "subject": "PaperBridge: started reviewing",
+      "mailboxPlacement": "INBOX"
+    },
+    {
+      "recipientRole": "researcher",
+      "subject": "PaperBridge: request submitted",
+      "mailboxPlacement": "SPAM"
+    },
+    {
+      "recipientRole": "endorser",
+      "subject": "PaperBridge: new review request",
+      "mailboxPlacement": "INBOX"
+    },
+    {
+      "recipientRole": "researcher",
+      "subject": "Verify your email for PaperBridge",
+      "mailboxPlacement": "INBOX"
+    },
+    {
+      "recipientRole": "endorser",
+      "subject": "Verify your email for PaperBridge",
+      "mailboxPlacement": "INBOX"
+    }
+  ],
+  "verificationLinksRedeemed": 2,
+  "authenticationCheckedOnSpamMessage": {
+    "spf": "pass",
+    "dkim": "pass",
+    "dmarc": "pass"
+  },
+  "senderIdentity": "PaperBridge; Brevo rewrites the free-address sender onto its authenticated brevosend.com domain",
+  "limitations": [
+    "One request-submitted confirmation was delivered to Spam; inbox placement is not guaranteed.",
+    "No owned sending domain was provided; Brevo Free sender rewriting is in use."
+  ],
+  "testDataCleaned": true,
+  "additionalLiveBrowserSmoke": {
+    "signup": true,
+    "verifiedResearcherSignIn": true,
+    "verificationEmailPlacement": "INBOX",
+    "runtimeErrors": 0,
+    "testAccountDeleted": true
+  }
+}

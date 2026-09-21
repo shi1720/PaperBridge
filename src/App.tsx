@@ -264,7 +264,8 @@ export default function App() {
         )}
         {user && !user.emailVerified && !demo && (
           <div className="verify-banner">
-            Verify your email before sending requests or publishing posts.{" "}
+            Verify your email before sending requests or publishing posts. Check
+            your inbox and spam folder.{" "}
             <button
               onClick={async () => {
                 try {
@@ -272,7 +273,7 @@ export default function App() {
                   toast(
                     result.alreadyVerified
                       ? "Your email is already verified. Refresh verification to continue."
-                      : "Verification email queued. Check your inbox shortly.",
+                      : "Verification email queued. Check your inbox and spam folder shortly.",
                   );
                 } catch (e: any) {
                   toast(e.message);

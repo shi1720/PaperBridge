@@ -6,7 +6,7 @@ A private-first research collaboration workspace for independent researchers and
 
 The production homepage explains private manuscript review and endorsement connections, with separate researcher and endorser entry points. Fictional profiles and the interactive fixture are excluded from production; local development retains a labeled demo.
 
-[paperbridge.web.app](https://paperbridge.web.app) retains its original Hosting project. The backend is isolated in the owner's existing billed project, with a dedicated database, Auth tenant, bucket and runtime identity. Production account entry remains gated until real SMTP delivery and cloud smoke checks pass. See the [validation record](docs/validation.md) for verified outcomes.
+[paperbridge.web.app](https://paperbridge.web.app) retains its original Hosting project. The backend is isolated in the owner's existing billed project, with a dedicated database, Auth tenant, bucket and runtime identity. Production email/password registration is enabled after live cloud checks and real Brevo SMTP delivery. Gmail received all six controlled messages: five in Inbox and one submission confirmation in Spam. See the [validation record](docs/validation.md) for verified outcomes.
 
 ## What is implemented
 
