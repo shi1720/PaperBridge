@@ -232,3 +232,63 @@ test("researchers share images and PDFs, save a discussion, edit posts, and keep
     await call(b.token, "account.delete");
   }
 });
+
+test("returning user waits for profile restoration before adding a manuscript", async ({
+  browser,
+}) => {
+  const person = await fixture("returning-author");
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  let releaseProfile!: () => void;
+  const heldProfile = new Promise<void>((resolve) => {
+    releaseProfile = resolve;
+  });
+  try {
+    await login(page, person);
+    await expect(page.locator(".account strong")).toHaveText(person.name);
+    await page.goto("/papers");
+    await expect(
+      page.getByRole("button", { name: "Add manuscript", exact: true }),
+    ).toBeVisible();
+    await page.route("**/paperbridgeApi", async (route) => {
+      if (route.request().postDataJSON()?.data?.action === "profile.get")
+        await heldProfile;
+      await route.continue();
+    });
+    const restoring = page.waitForRequest(
+      (request) =>
+        request.url().endsWith("/paperbridgeApi") &&
+        request.postDataJSON()?.data?.action === "profile.get",
+    );
+    await page.reload();
+    await restoring;
+    // Finish loading the route code before inspecting the held-auth state. This
+    // prevents Suspense's temporary fallback from masking the original race.
+    await page.evaluate(async () => {
+      await import("/src/components/Papers.tsx");
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      );
+    });
+    await expect(page.locator("main .loading")).toHaveText(
+      "Loading your workspace…",
+    );
+    await expect(
+      page.getByRole("button", { name: "Add manuscript", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Sign in", exact: true }),
+    ).toHaveCount(0);
+    releaseProfile();
+    await page
+      .getByRole("button", { name: "Add manuscript", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel("Manuscript PDF")).toBeVisible();
+    await expect(dialog.getByLabel("Email address")).toHaveCount(0);
+  } finally {
+    releaseProfile();
+    await context.close();
+    await call(person.token, "account.delete");
+  }
+});

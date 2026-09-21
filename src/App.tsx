@@ -83,6 +83,7 @@ export default function App() {
   const {
       call,
       profile,
+      loading,
       profileError,
       refreshProfile,
       demo,
@@ -116,6 +117,12 @@ export default function App() {
     setAuthIntent({ role, mode });
     setAuthOpen(true);
   }
+  if (loading && !demo)
+    return (
+      <main id="main">
+        <Loading />
+      </main>
+    );
   return (
     <div className={`app ${publicHome ? "public-home" : ""}`}>
       <a href="#main" className="skip-link">
