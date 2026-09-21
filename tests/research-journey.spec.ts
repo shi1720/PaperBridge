@@ -428,8 +428,16 @@ test("researcher social journey connects public profiles, follows, discussions, 
       b.getByRole("button", { name: "Following", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
     await b.goto("/community");
-    await b.getByRole("button", { name: /^Following/ }).click();
     const post = b.locator(".social-post").filter({ hasText: body });
+    await expect(post).toBeVisible();
+    // Both the post action and feed filter say Following once data has loaded.
+    await expect(
+      post.getByRole("button", { name: "Following", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await b
+      .getByRole("group", { name: "Feed filter", exact: true })
+      .getByRole("button", { name: /^Following/ })
+      .click();
     await expect(post).toBeVisible();
     await expect(
       post.getByRole("link", { name: nameA, exact: true }),
