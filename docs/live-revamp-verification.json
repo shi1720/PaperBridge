@@ -45,5 +45,7 @@
     "Production AI report mobile accessibility",
     "Production request workspace mobile accessibility"
   ],
-  "browserErrors": []
+  "browserErrors": [],
+  "temporaryDemoDataRemoved": true,
+  "cleanupVerifiedAt": "2026-09-21T13:00:18.921842+00:00"
 }
