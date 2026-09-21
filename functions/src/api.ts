@@ -1,3 +1,4 @@
+import { type EmailPresentation } from "./email-template";
 import { getDb, getAppAuth, getPaperBucket, assertAppTenant } from "./runtime";
 import { paperListItem } from "./dto";
 import {
@@ -153,7 +154,12 @@ async function notification(
   body: string,
   link: string,
   now: number,
-  email?: { to: string; subject: string; body: string },
+  email?: {
+    to: string;
+    subject: string;
+    body: string;
+    presentation?: EmailPresentation;
+  },
 ): Promise<void> {
   const ref = db().collection("notifications").doc();
   writer.set(ref, { userId, title, body, link, read: false, createdAt: now });
@@ -163,6 +169,7 @@ async function notification(
       to: email.to,
       subject: email.subject,
       body: email.body,
+      ...(email.presentation ? { presentation: email.presentation } : {}),
       status: "queued",
       attempts: 0,
       nextAttemptAt: now,
@@ -300,6 +307,25 @@ async function transitionRequest(
       {
         to: other.data()?.email,
         subject: `PaperBridge: ${labels[status] || status}`,
+        presentation: {
+          eyebrow: "YOUR REVIEW CONVERSATION",
+          heading:
+            status === "reviewing"
+              ? "A closer look at your work."
+              : status === "accepted"
+                ? "An offer to move forward."
+                : status === "changes_requested"
+                  ? "A fresh perspective for your next draft."
+                  : status === "endorsed"
+                    ? "A milestone, recorded."
+                    : "An update on your request.",
+          intro: `${actor === "requester" ? req.requesterName : req.reviewerName} ${labels[status] || status}. Open the conversation to see the details.`,
+          manuscript: req.title,
+          category: req.category,
+          actionLabel: "View conversation",
+          actionUrl: `${siteUrl()}/requests/${id}`,
+          note: "An offer to help is not an arXiv endorsement. Official endorsement happens on arXiv; completion is reported by the author.",
+        },
         body: `${body}\n\n${siteUrl()}/requests/${id}\n\nAn offer to help is not an arXiv endorsement. Completion is reported by the author.`,
       },
     );
@@ -695,6 +721,16 @@ async function dispatchApi(
           {
             to: requesterUser.data()?.email,
             subject: "PaperBridge: request submitted",
+            presentation: {
+              eyebrow: "REQUEST SUBMITTED",
+              heading: "A new conversation starts here.",
+              intro: `Your review request has been sent to ${r.name}. You can follow its progress and continue the conversation in your private workspace.`,
+              manuscript: p.title,
+              category: p.category,
+              actionLabel: "View your request",
+              actionUrl: `${siteUrl()}/requests/${ref.id}`,
+              note: "Your request is an invitation to review. It does not guarantee endorsement or acceptance by arXiv.",
+            },
             body: `Your request for “${p.title}” was successfully submitted to ${r.name}.\n\nTrack your request: ${siteUrl()}/requests/${ref.id}\n\nThis request does not guarantee endorsement.`,
           },
         );
@@ -708,6 +744,16 @@ async function dispatchApi(
           {
             to: reviewerUser.data()?.email,
             subject: "PaperBridge: new review request",
+            presentation: {
+              eyebrow: "AN INVITATION TO REVIEW",
+              heading: "Your perspective could make a difference.",
+              intro: `${u.name} would value your feedback. Read their introduction, review the manuscript privately, and decide whether you can help.`,
+              manuscript: p.title,
+              category: p.category,
+              actionLabel: "Review the request",
+              actionUrl: `${siteUrl()}/requests/${ref.id}`,
+              note: "You can accept, request changes, or decline in PaperBridge. Check your category-specific eligibility on arXiv before offering to endorse.",
+            },
             body: `${u.name} requested review of “${p.title}” in ${p.category}.\n\nReview privately: ${siteUrl()}/requests/${ref.id}\n\nYour arXiv eligibility is category-specific. Please check arXiv before offering to help.`,
           },
         );

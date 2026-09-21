@@ -13,7 +13,7 @@ The production homepage explains private manuscript review and endorsement conne
 - Researcher and endorser onboarding, email/password and optional Google authentication, verification, recovery, public profiles, 155 canonical arXiv categories, self-attested eligibility, availability and capacity.
 - Private PDF manuscripts, revision history with immutable files and version-specific notes, PDF.js rendering, text selection and persistent highlights, page-aware private/shared notes, bounded text extraction.
 - Atomic endorsement requests with duplicate/capacity protection, private conversations, reviewing/change-request/offer/decline/withdrawal states, and author-reported arXiv completion.
-- Durable two-recipient email outbox, SMTP delivery worker, retry/backoff, and honest queued/sent/failed visibility.
+- Branded HTML/plain-text verification, password recovery and two-recipient review emails, with an embedded logo, durable SMTP outbox, retry/backoff and honest queued/sent/failed visibility.
 - Community feed, arXiv links, likes, comments, following, private chat, blocking, reporting and reported-contribution rankings.
 - Encrypted per-user OpenAI/Anthropic/Gemini keys; dynamic model catalogs; independently configured evidence, attribution and critical-reader agents; synthesis, optional Crossref metadata tools, exact-quote grounding, source audit, explicit consent, usage limits, and safe retry IDs.
 - Account exports, provider-key removal, profile privacy and deletion with token revocation, in-flight operation leases, anonymization and retryable cleanup.

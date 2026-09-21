@@ -4,7 +4,6 @@ import {
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
-  sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth, serviceReady, googleAuthEnabled } from "../lib/firebase";
 import { useApp } from "../lib/context";
@@ -30,12 +29,14 @@ export function AuthModal({
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [busy, setBusy] = useState(false),
+    [success, setSuccess] = useState(""),
     [error, setError] = useState("");
   useEffect(() => {
     if (open) {
       setMode(initialMode);
       setRole(initialRole);
       setError("");
+      setSuccess("");
     }
   }, [open, initialRole, initialMode]);
   async function finish() {
@@ -46,10 +47,13 @@ export function AuthModal({
     e.preventDefault();
     setBusy(true);
     setError("");
+    setSuccess("");
     try {
       if (mode === "reset") {
-        await sendPasswordResetEmail(auth, email);
-        toast("If an account exists, a password reset email is on its way.");
+        await call("auth.sendPasswordReset", { email });
+        setSuccess(
+          "If an account exists, a password reset email is on its way. Check your inbox and spam folder.",
+        );
         setMode("login");
       } else if (mode === "login") {
         await signInWithEmailAndPassword(auth, email, password);
@@ -176,6 +180,11 @@ export function AuthModal({
         </div>
       )}
       <form onSubmit={submit} className="form">
+        {success && (
+          <p className="notice" role="status">
+            {success}
+          </p>
+        )}
         {mode === "signup" && (
           <label>
             Full name

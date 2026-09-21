@@ -113,6 +113,9 @@ test("concurrent delivery claims and duplicate trigger events send once", async 
   assert.equal(job.attempts, 1);
   assert.match(lastMessage.messageId, /@example[.]test>$/);
   assert.equal(lastTransportOptions.secure, true);
+  assert.match(lastMessage.html, /cid:paperbridge-mark/);
+  assert.equal(lastMessage.text, "Synthetic message");
+  assert.equal(lastMessage.attachments[0].cid, "paperbridge-mark");
 });
 test("SMTP errors retry with backoff, redact provider details, and terminate after eight attempts", async () => {
   const ref = await seed("failure");

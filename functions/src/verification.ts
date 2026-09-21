@@ -96,6 +96,15 @@ export async function queueVerificationEmail(uid: string) {
       to: email,
       subject: "Verify your email for PaperBridge",
       body: `Welcome to PaperBridge.\n\nVerify your email address to request endorsements and collaborate with researchers:\n\n${link}\n\nIf you did not create this PaperBridge account, you can ignore this email.\n\nThe PaperBridge team`,
+      presentation: {
+        eyebrow: "WELCOME TO PAPERBRIDGE",
+        heading: "Your next chapter starts here.",
+        intro:
+          "Verify your email address to start conversations, share your manuscript privately, and find support for your research.",
+        actionLabel: "Verify email address",
+        actionUrl: link,
+        note: "If you didn’t create this account, you can safely ignore this email. Your manuscript is never attached to verification emails.",
+      },
       status: "queued",
       attempts: 0,
       nextAttemptAt: now,

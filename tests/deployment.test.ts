@@ -45,6 +45,11 @@ describe.each(["firebase.json", "firebase.production.json"])(
         ignoreStrings: config.functions[0].ignore,
       });
       expect(
+        files.some((file: { name: string }) =>
+          file.name.endsWith("/assets/paperbridge-mark.png"),
+        ),
+      ).toBe(true);
+      expect(
         files.filter((file: { name: string }) =>
           /^\.(secret|env)/.test(basename(file.name)),
         ),

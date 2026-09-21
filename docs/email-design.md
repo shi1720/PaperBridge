@@ -1,0 +1,13 @@
+# PaperBridge transactional email design
+
+All outbox messages use one responsive HTML layout with a matching plain-text alternative. The design carries the website’s ivory background, forest-green wordmark and buttons, lime accent, serif headings, and a manuscript panel for review notifications. It covers verification, password recovery, submission confirmations, review invitations, and every request status update. Older queued messages receive the same shell through a fallback renderer.
+
+The book mark is the same Lucide BookOpen used in the website header. Its 96-pixel PNG is attached inline with a content ID and displayed at 32 pixels; the wordmark remains real text when images are blocked. The bundled asset and its license are included in the Functions archive. No remote font, tracking pixel, or external image is added by the template. Brevo’s account-level delivery/tracking behavior is separate.
+
+Inline styles and presentation tables preserve the layout in email clients; an Outlook table wrapper supplies a fixed desktop width, with fluid sizing and mobile padding elsewhere. Every message includes an accessible heading, an explicit action label, a copyable fallback URL when applicable, and the relevant safety/context note. HTML and plain text contain the same essential action and context.
+
+All user-supplied titles, names and copy are HTML-escaped. Action buttons only accept HTTPS links to the configured PaperBridge request pages or its project’s Firebase Auth action handler. The renderer never accepts raw HTML. This is backed by injection/link-allowlist tests and a real multipart MIME composition test.
+
+Password recovery uses tenant-scoped Admin-generated action links and the same SMTP outbox instead of the client SDK’s generic email. Unknown, disabled, deleted and rate-limited accounts receive the same generic acknowledgement. Recovery allows ten accepted requests per IP/hour, three per address/hour and a one-minute per-address cooldown. Fingerprints use a server-secret HMAC, have a TTL, and do not store raw addresses or IPs. The endpoint accepts only an address; callers cannot set the recipient, template, action URL or tenant. Account leases and deletion checks prevent recovery mail from resurrecting deleted-account data. See [Google’s tenant-specific email-link guidance](https://docs.cloud.google.com/identity-platform/docs/multi-tenancy-managing-tenants).
+
+Browser previews are inspected at 320, 390 and 800 pixels. These checks establish the rendered design and overflow behavior, not exhaustive Gmail/Outlook/Apple Mail conformance. Actual deployed-message delivery and MIME verification are recorded separately in the validation record.
