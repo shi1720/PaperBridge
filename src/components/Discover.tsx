@@ -55,7 +55,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
     ["cs.AI", "Artificial intelligence"],
     ["cs.CL", "Language & NLP"],
     ["cs.CV", "Computer vision"],
-    ["math.CO", "Mathematics"],
+    ["math.CO", "Combinatorics"],
   ];
   async function follow(p: Profile) {
     if (!profile) {
@@ -104,7 +104,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
                   : onAuth()
               }
             >
-              Find your connection <ArrowRight size={17} />
+              Find potential endorsers <ArrowRight size={17} />
             </button>
             <Link to="/papers" className="text-link">
               Prepare a manuscript <ArrowUpRight size={16} />
@@ -302,7 +302,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
                       onClick={() => (profile ? setRequest(p) : onAuth())}
                       disabled={!p.acceptingRequests}
                     >
-                      Connect <ArrowUpRight size={15} />
+                      Request review <ArrowUpRight size={15} />
                     </button>
                   </div>
                 </article>
@@ -407,8 +407,8 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
               <span>Give your paper a fresh pair of eyes.</span>
             </div>
             <p>
-              Explore evidence, originality, and reviewer perspectives in your
-              private review studio.
+              Check evidence, attribution, and methods in your private review
+              studio.
             </p>
             <Link to="/review" className="text-link">
               Open review studio <ArrowUpRight size={15} />
@@ -457,7 +457,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
                   }
                 }}
               >
-                Request a connection <ArrowRight size={16} />
+                Request endorsement support <ArrowRight size={16} />
               </button>
               <button
                 className="button"
@@ -567,8 +567,8 @@ function RequestModal({
     <Modal
       open={!!person}
       onClose={onClose}
-      title={`Connect with ${person?.name || "an endorser"}`}
-      description="A thoughtful introduction makes a good first impression."
+      title={`Request endorsement support from ${person?.name || "a researcher"}`}
+      description="Share a manuscript in their category, introduce your work, and add your arXiv endorsement link if you have one."
     >
       {matches.length ? (
         <form className="form" onSubmit={submit}>

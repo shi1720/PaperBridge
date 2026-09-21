@@ -155,10 +155,14 @@ test("follow state survives navigation and cancelled sharing consent is cleared"
   const maya = page.locator(".person-card").filter({
     has: page.getByRole("button", { name: "Maya Chen", exact: true }),
   });
-  await maya.getByRole("button", { name: "Connect", exact: true }).click();
+  await maya
+    .getByRole("button", { name: "Request review", exact: true })
+    .click();
   await page.getByLabel("I agree to share this manuscript").check();
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await maya.getByRole("button", { name: "Connect", exact: true }).click();
+  await maya
+    .getByRole("button", { name: "Request review", exact: true })
+    .click();
   await expect(
     page.getByLabel("I agree to share this manuscript"),
   ).not.toBeChecked();

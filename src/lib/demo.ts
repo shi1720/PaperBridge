@@ -284,7 +284,11 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
       );
       return { ok: true };
     case "feed.list":
-      return [...feed];
+      return feed.filter(
+        (post) => !p.following || following.has(post.authorId),
+      );
+    case "feed.get":
+      return feed.find((post) => post.id === p.id);
     case "feed.post": {
       const row = { ...stamped, ...p, likes: 0, commentCount: 0 };
       feed.unshift(row);

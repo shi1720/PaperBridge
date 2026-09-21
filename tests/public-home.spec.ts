@@ -38,7 +38,7 @@ test("account entry exposes privacy details and preserves the signup intent", as
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.goto(accountOrigin + "/discover");
   await page
-    .getByRole("button", { name: "Find your connection", exact: true })
+    .getByRole("button", { name: "Find potential endorsers", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
@@ -50,7 +50,10 @@ test("public home explains the real workflow without invented activity", async (
     "Build a stronger paper.",
   );
   await expect(
-    page.getByRole("button", { name: "I’m working on a paper", exact: true }),
+    page.getByRole("button", {
+      name: "Create your research profile",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Join as an endorser", exact: true }),
@@ -70,14 +73,29 @@ test("public home explains the real workflow without invented activity", async (
     page.locator(".lp-workspace button, .lp-workspace a"),
   ).toHaveCount(0);
   await page
-    .getByRole("link", { name: "How connections work", exact: true })
+    .locator(".landing-header")
+    .getByRole("link", { name: "Community", exact: true })
+    .click();
+  await expect(page).toHaveURL(/#community$/);
+  await page
+    .getByRole("link", { name: "Explore the research community", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Find your research community",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.goto(origin);
+  await page
+    .getByRole("link", { name: "Find endorsement support", exact: true })
     .click();
   await expect(page).toHaveURL(/#find-endorsers$/);
   await expect(
     page.getByText("Sign in to view participating profiles.", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "I’m working on a paper", exact: true })
+    .getByRole("button", { name: "Create your research profile", exact: true })
     .click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();

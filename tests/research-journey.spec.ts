@@ -44,7 +44,7 @@ async function register(
 ) {
   await page.goto("/");
   await page
-    .getByRole("button", { name: "I’m working on a paper", exact: true })
+    .getByRole("button", { name: "Create your research profile", exact: true })
     .click();
   if (endorser)
     await page.getByRole("button", { name: "I can help endorse" }).click();
@@ -165,7 +165,9 @@ test("two researchers complete a private manuscript and endorsement conversation
     .click();
   await author.getByLabel("Search researchers").fill(reviewerName);
   await expect(author.locator(".person-card")).toHaveCount(1);
-  await author.getByRole("button", { name: "Connect", exact: true }).click();
+  await author
+    .getByRole("button", { name: "Request review", exact: true })
+    .click();
   await author
     .getByLabel("Your manuscript")
     .selectOption({ label: "Sparse pathways for interpretable models" });
@@ -350,5 +352,108 @@ test("signed-out password recovery sends a branded link that changes only the in
       .where("userId", "==", user.uid)
       .get();
     for (const job of jobs.docs) await job.ref.delete();
+  }
+});
+
+test("researcher social journey connects public profiles, follows, discussions, notifications and private messages", async ({
+  browser,
+}) => {
+  const aContext = await browser.newContext(),
+    bContext = await browser.newContext();
+  const a = await aContext.newPage(),
+    b = await bContext.newPage();
+  const stamp = Date.now();
+  const nameA = "Social Author " + stamp,
+    nameB = "Social Reader " + stamp;
+  try {
+    const idA = await register(a, nameA, `social-author-${stamp}@example.test`);
+    await register(b, nameB, `social-reader-${stamp}@example.test`);
+    await a.goto("/community");
+    const body = "How should we report variation across random seeds? " + stamp;
+    await a.getByLabel("Your community post").fill(body);
+    await a.getByRole("button", { name: "Publish post", exact: true }).click();
+    await expect(
+      a.locator(".social-post").filter({ hasText: body }),
+    ).toBeVisible();
+    await b.goto("/researchers");
+    await b.getByLabel("Search community researchers").fill(nameA);
+    await b.getByRole("link", { name: nameA, exact: true }).click();
+    await expect(
+      b.getByRole("heading", { name: nameA, exact: true }),
+    ).toBeVisible();
+    await b
+      .getByRole("button", { name: "Follow researcher", exact: true })
+      .click();
+    await expect(
+      b.getByRole("button", { name: "Following", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await b.goto("/community");
+    await b.getByRole("button", { name: /^Following/ }).click();
+    const post = b.locator(".social-post").filter({ hasText: body });
+    await expect(post).toBeVisible();
+    await expect(
+      post.getByRole("link", { name: nameA, exact: true }),
+    ).toHaveAttribute("href", "/researchers/" + idA);
+    await post.getByRole("button", { name: /Like/ }).click();
+    await expect(post.getByRole("button", { name: /Like/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await post.getByRole("button", { name: /Discuss/ }).click();
+    await post
+      .getByLabel("Add a thoughtful reply")
+      .fill("Report the mean and standard deviation across all runs.");
+    await post.getByRole("button", { name: "Reply", exact: true }).click();
+    await expect(
+      post.getByText(
+        "Report the mean and standard deviation across all runs.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await a.reload();
+    await a.getByRole("button", { name: "Notifications", exact: true }).click();
+    await a
+      .getByRole("dialog")
+      .getByRole("link", { name: "Open update", exact: true })
+      .first()
+      .click();
+    await expect(a).toHaveURL(/\/community#post-/);
+    await expect(a.locator(".social-post")).toContainText(body);
+    await b.goto("/messages");
+    await b
+      .getByRole("button", { name: "New conversation", exact: true })
+      .click();
+    await b.getByLabel("Find a researcher", { exact: true }).fill(nameA);
+    await b.getByRole("dialog").getByRole("combobox").selectOption(idA);
+    await b
+      .getByRole("button", { name: "Open conversation", exact: true })
+      .click();
+    await expect(b.getByRole("dialog")).not.toBeVisible();
+    await b
+      .getByLabel("Your message", { exact: true })
+      .fill("Would you like to compare evaluation protocols?");
+    await b.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(b.getByLabel("Conversation messages")).toContainText(
+      "Would you like to compare evaluation protocols?",
+    );
+    await a.reload();
+    await a.getByRole("button", { name: "Notifications", exact: true }).click();
+    await a
+      .getByRole("dialog")
+      .getByRole("link", { name: "Open update", exact: true })
+      .first()
+      .click();
+    await expect(a).toHaveURL(/\/messages\?chat=/);
+    await expect(a.getByLabel("Conversation messages")).toContainText(
+      "Would you like to compare evaluation protocols?",
+    );
+    await getFirestore()
+      .doc("profiles/" + idA)
+      .update({ publicProfile: false });
+    await b.goto("/researchers/" + idA);
+    await expect(b.getByRole("alert")).toContainText("private");
+  } finally {
+    await aContext.close();
+    await bContext.close();
   }
 });

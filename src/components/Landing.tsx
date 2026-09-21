@@ -15,6 +15,8 @@ import {
   GitBranch,
   ChevronRight,
   ShieldCheck,
+  UserRound,
+  Heart,
 } from "lucide-react";
 import { serviceReady } from "../lib/firebase";
 import "./landing.css";
@@ -130,8 +132,9 @@ export function Landing({
           paperbridge<span className="brand-period">.</span>
         </Link>
         <nav aria-label="Public navigation">
-          <a href="#how-it-works">The workflow</a>
+          <a href="#how-it-works">Endorsement requests</a>
           <a href="#ai-review">AI review</a>
+          <a href="#community">Community</a>
           <a href="#for-endorsers">For endorsers</a>
         </nav>
         <button className="button lp-signin" onClick={onSignIn}>
@@ -152,19 +155,20 @@ export function Landing({
             </em>
           </h1>
           <p className="landing-intro">
-            Find potential arXiv endorsers by research category. Share your
-            draft privately, get feedback in the margins, and bring your next
-            revision into focus.
+            Find potential arXiv endorsers by category, send a private
+            endorsement request, and strengthen your manuscript with feedback
+            and AI review. Build a research profile and a community around your
+            work.
           </p>
           <div className="landing-actions">
             <button
               className="button primary"
               onClick={() => onJoin("researcher")}
             >
-              I’m working on a paper <ArrowRight size={17} />
+              Create your research profile <ArrowRight size={17} />
             </button>
             <a className="landing-secondary" href="#find-endorsers">
-              How connections work <ArrowRight size={16} />
+              Find endorsement support <ArrowRight size={16} />
             </a>
           </div>
           <p className="landing-hero-note">
@@ -181,52 +185,57 @@ export function Landing({
       </section>
       <div className="lp-capability-bar" aria-label="Workspace capabilities">
         <span>
-          <SlidersHorizontal size={17} /> Category-based discovery
+          <SlidersHorizontal size={17} /> Find potential endorsers
         </span>
         <span>
           <LockKeyhole size={17} /> Private PDF collaboration
         </span>
         <span>
-          <Sparkles size={17} /> Optional AI review
+          <Sparkles size={17} /> Four-stage AI review
         </span>
         <span>
-          <GitBranch size={17} /> Manuscript version history
+          <Users size={17} /> A social network for researchers
         </span>
       </div>
 
       <section className="lp-flow landing-section" id="how-it-works">
         <div className="landing-section-heading">
           <div>
-            <p className="landing-eyebrow">FROM DRAFT TO DIALOGUE</p>
+            <p className="landing-eyebrow">
+              FROM MANUSCRIPT TO ENDORSEMENT REQUEST
+            </p>
             <h2>
-              You have the research.
+              Your next steps,
               <br />
-              <em>Here’s the next step.</em>
+              <em>all in one place.</em>
             </h2>
           </div>
           <p>
-            Finding a relevant person is only the beginning. Keep the
-            manuscript, the request, and the conversation connected.
+            No scattered email threads. Give a researcher the context to review
+            your work, then keep feedback, revisions, and request status
+            together.
           </p>
         </div>
         <ol className="lp-steps">
           <li>
             <span className="lp-step-number">01</span>
             <div>
-              <h3>Find the right field</h3>
+              <h3>Filter for your arXiv category</h3>
               <p>
-                Choose your arXiv categories. Discover participating researchers
-                by expertise and availability.
+                Choose your manuscript’s category and filter participating
+                endorsers by availability. Search names, institutions, and
+                profile headlines to narrow your search.
               </p>
             </div>
           </li>
           <li>
             <span className="lp-step-number">02</span>
             <div>
-              <h3>Start with your work</h3>
+              <h3>Send an endorsement request</h3>
               <p>
-                Send a focused introduction with a private manuscript. The
-                recipient decides whether they can help.
+                Share a PDF in the researcher’s category, a short introduction,
+                and your arXiv endorsement link if you have one. They can review
+                your work and decide whether to help.
               </p>
             </div>
           </li>
@@ -235,8 +244,9 @@ export function Landing({
             <div>
               <h3>Make the next draft better</h3>
               <p>
-                Discuss the details, share PDF annotations, and keep track of
-                revisions in one workspace.
+                Get email updates, discuss the paper privately, and respond to
+                highlights and comments. Upload a new version without losing the
+                conversation.
               </p>
             </div>
           </li>
@@ -262,18 +272,34 @@ export function Landing({
       <section className="lp-ai-section" id="ai-review">
         <div className="lp-ai-copy">
           <p className="landing-eyebrow">
-            <Sparkles size={16} /> ANOTHER SET OF EYES
+            <Sparkles size={16} /> THREE SPECIALIST AGENTS. ONE REVISION PLAN.
           </p>
           <h2>
-            Put your argument
+            See the passage.
             <br />
-            <em>under the lens.</em>
+            <em>Know what to improve.</em>
           </h2>
           <p>
-            Before you ask someone else to read, give your draft a structured AI
-            review. Look for gaps in evidence, attribution, and reasoning—then
-            decide what deserves a revision.
+            Give your draft a focused review before you send it out. The
+            Evidence lens checks support for claims. The Attribution lens
+            examines credit and novelty wording. The Critical reader questions
+            methods and assumptions. Synthesis brings their findings into a
+            prioritized review.
           </p>
+          <ul className="lp-ai-benefits">
+            <li>
+              <Check size={16} /> Findings quote the manuscript passage they
+              address.
+            </li>
+            <li>
+              <Check size={16} /> Each concern includes a concrete suggested
+              revision.
+            </li>
+            <li>
+              <Check size={16} /> Inspect uncertainty and make the final call
+              yourself.
+            </li>
+          </ul>
           <div className="lp-provider-note">
             <span>YOUR PROVIDER. YOUR MODELS.</span>
             <strong>OpenAI · Anthropic · Gemini</strong>
@@ -289,37 +315,57 @@ export function Landing({
             <strong>AI manuscript review</strong>
             <span>Illustrative output</span>
           </div>
-          <div className="lp-review-lenses">
-            <span>01 Evidence lens</span>
-            <span>02 Attribution lens</span>
-            <span>03 Critical reader</span>
+          <div className="lp-example-context">
+            <FileText size={15} /> Example passages → concerns → revisions
           </div>
-          <div className="lp-review-finding">
-            <span className="lp-finding-label">
-              EVIDENCE LENS / QUESTION TO CHECK
-            </span>
-            <h3>Does the conclusion extend beyond the experiment?</h3>
-            <p>
-              Compare the scope of the claim with the conditions described in
-              Methods. State where the evidence ends.
-            </p>
-            <div>
-              <FileText size={14} /> Ground the revision in your manuscript
-            </div>
-          </div>
+          {[
+            {
+              agent: "01 · Evidence lens",
+              quote: "Our method improves accuracy by 12% on a single dataset.",
+              concern: "12% relative to what?",
+              revision:
+                "State the baseline score and whether the gain is relative or in percentage points. Limit the conclusion to the dataset tested.",
+            },
+            {
+              agent: "02 · Attribution lens",
+              quote:
+                "To our knowledge, this is the first approach of its kind.",
+              concern: "Make the novelty claim specific.",
+              revision:
+                "Name the closest prior approaches, cite them, and explain exactly what your method adds. A broad claim needs a clear comparison.",
+            },
+            {
+              agent: "03 · Critical reader",
+              quote: "We select the best run from five random seeds.",
+              concern: "Could the reported gain depend on the seed?",
+              revision:
+                "Report the mean and variation across all five runs, with the same evaluation protocol for the baseline.",
+            },
+          ].map((finding) => (
+            <article className="lp-review-finding" key={finding.agent}>
+              <span className="lp-finding-label">{finding.agent}</span>
+              <blockquote>“{finding.quote}”</blockquote>
+              <h3>{finding.concern}</h3>
+              <p>
+                <strong>Suggested revision:</strong> {finding.revision}
+              </p>
+            </article>
+          ))}
           <div className="lp-synthesis">
             <span>
               <GitBranch size={17} /> 04 · Synthesis
             </span>
             <p>
-              Bring the three perspectives into a prioritized review you can
-              inspect.
+              Prioritize the evaluation gap, clarify the reported improvement,
+              then sharpen the contribution statement. Inspect the supporting
+              findings before revising.
             </p>
           </div>
           <p className="lp-ai-caveat">
-            AI findings can be wrong. This is research assistance, not peer
-            review, originality certification, or a decision about arXiv
-            eligibility.
+            Illustrative examples, not a live review. AI examines extracted
+            manuscript text and can be wrong; figures, equations, and literature
+            coverage may be incomplete. It does not certify originality or
+            replace peer review.
           </p>
         </div>
       </section>
@@ -358,25 +404,27 @@ export function Landing({
         <div className="lp-discovery-copy">
           <p className="landing-eyebrow">RELEVANCE BEFORE REACH</p>
           <h2>
-            Start in your field.
+            Find potential endorsers.
             <br />
-            <em>Make a specific ask.</em>
+            <em>Make a relevant request.</em>
           </h2>
           <p>
-            Skip the scattered search. Filter participating endorser profiles by
-            arXiv category and availability, then send a request with the
-            context a researcher needs.
+            Filter directly by arXiv category and who is accepting requests.
+            Read a researcher’s profile, check their stated fields, and send an
+            endorsement request with your manuscript and introduction.
           </p>
           <ul>
             <li>
-              <Check size={16} /> A research profile beyond your affiliation
+              <Check size={16} /> Introduce your work with a bio, headline, and
+              research categories
             </li>
             <li>
-              <Check size={16} /> A manuscript attached to your introduction
+              <Check size={16} /> Share your PDF privately with the researcher
+              you select
             </li>
             <li>
-              <Check size={16} /> Request status and private conversation
-              together
+              <Check size={16} /> Track pending requests, feedback, and your
+              next revision
             </li>
           </ul>
           <Link className="landing-secondary" to="/discover">
@@ -392,16 +440,16 @@ export function Landing({
         <div>
           <p className="landing-eyebrow">FOR RESEARCHERS WHO CAN HELP</p>
           <h2>
-            Open a door.
+            Create your profile.
             <br />
-            <em>On your terms.</em>
+            <em>Open a door.</em>
           </h2>
         </div>
         <div>
           <p>
-            You know how much the right conversation can matter. Make yourself
-            discoverable in your field, read a draft, and decide where you can
-            contribute.
+            Help promising work find its next step. Add your research interests,
+            bio, and arXiv author link. Publish an endorser profile so authors
+            in your categories can find you and send a focused request.
           </p>
           <ul>
             <li>
@@ -420,6 +468,75 @@ export function Landing({
           <small>
             Eligibility is self-attested here. Confirm it directly on arXiv.
           </small>
+        </div>
+      </section>
+
+      <section className="lp-community landing-section" id="community">
+        <div className="landing-section-heading">
+          <div>
+            <p className="landing-eyebrow">
+              <Users size={17} /> A SOCIAL NETWORK FOR RESEARCHERS
+            </p>
+            <h2>
+              Find your people.
+              <br />
+              <em>Keep ideas moving.</em>
+            </h2>
+          </div>
+          <p>
+            A paper can start a connection. Keep it going with a research feed,
+            discussions, follows, and private messages, whether you need an
+            endorsement today or want to build your research network over time.
+          </p>
+        </div>
+        <div className="lp-community-features">
+          <article>
+            <span className="lp-community-icon">
+              <UserRound size={22} />
+            </span>
+            <h3>A profile for your research</h3>
+            <p>
+              Introduce your interests, background, and current work. Choose
+              whether other members can view your profile. An institutional
+              affiliation is optional.
+            </p>
+          </article>
+          <article>
+            <span className="lp-community-icon">
+              <Heart size={22} />
+            </span>
+            <h3>A feed worth contributing to</h3>
+            <p>
+              Share an arXiv paper, post a research question, or discuss a
+              result. Like and comment on posts. Follow researchers to focus
+              your feed on the people whose work you want to keep up with.
+            </p>
+          </article>
+          <article>
+            <span className="lp-community-icon">
+              <MessageSquare size={22} />
+            </span>
+            <h3>Conversations that go further</h3>
+            <p>
+              Message a researcher to exchange ideas or explore a collaboration.
+              Keep private manuscript reviews separate from community posts,
+              with reporting and blocking controls when you need them.
+            </p>
+          </article>
+        </div>
+        <div className="lp-community-entry">
+          <div>
+            <strong>
+              Your next conversation could start with a good question.
+            </strong>
+            <p>
+              Posts are visible to signed-in members. Your private manuscripts
+              stay private.
+            </p>
+          </div>
+          <Link className="button primary" to="/community">
+            Explore the research community <ArrowUpRight size={17} />
+          </Link>
         </div>
       </section>
 
@@ -479,16 +596,16 @@ export function Landing({
           FOR RESEARCHERS, WITH OR WITHOUT AN INSTITUTION
         </p>
         <h2>
-          Start with your manuscript.
+          Your paper. Your people.
           <br />
-          <em>See where the work can go.</em>
+          <em>Your next step.</em>
         </h2>
         <div className="landing-actions">
           <button
             className="button primary"
             onClick={() => onJoin("researcher")}
           >
-            Join as a researcher <ArrowRight size={17} />
+            Create your profile <ArrowRight size={17} />
           </button>
           <a className="landing-secondary" href="#for-endorsers">
             I’d like to help researchers <ArrowUpRight size={17} />
