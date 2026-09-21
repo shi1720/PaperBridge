@@ -13,13 +13,14 @@ const {
   getGlobalDefaultAccount,
   getAccessToken,
 } = require("firebase-tools/lib/auth");
+const { clientId, clientSecret } = require("firebase-tools/lib/api");
 const backendRequire = createRequire(
   path.resolve(__dirname, "../functions/package.json"),
 );
 const { initializeApp, deleteApp } = backendRequire("firebase-admin/app");
 const { getAuth } = backendRequire("firebase-admin/auth");
-const { getFirestore } = backendRequire("firebase-admin/firestore");
-const { getStorage } = backendRequire("firebase-admin/storage");
+const { Firestore } = backendRequire("@google-cloud/firestore");
+const { Storage } = backendRequire("@google-cloud/storage");
 const projectId = "gen-lang-client-0444960702";
 const databaseId = "paperbridge";
 const tenantId = "PaperBridge-t4997";
@@ -240,7 +241,9 @@ async function cleanup() {
   try {
     assert.ok(
       !process.env.FIRESTORE_EMULATOR_HOST &&
-        !process.env.FIREBASE_AUTH_EMULATOR_HOST,
+        !process.env.FIREBASE_AUTH_EMULATOR_HOST &&
+        !process.env.FIREBASE_STORAGE_EMULATOR_HOST &&
+        !process.env.STORAGE_EMULATOR_HOST,
       "Do not mix production verification with emulator routing.",
     );
     const { apiKey } = webConfig();
@@ -276,9 +279,24 @@ async function cleanup() {
       },
       runId,
     );
-    db = getFirestore(app, databaseId);
+    // The Admin Auth credential supports CLI token refresh and remote signing.
+    // Firestore/Storage Admin wrappers only accept certificate/ADC credentials,
+    // so their native clients receive the existing user credential in memory.
+    const cloudCredentials = {
+      type: "authorized_user",
+      client_id: clientId(),
+      client_secret: clientSecret(),
+      refresh_token: account.tokens.refresh_token,
+    };
+    db = new Firestore({
+      projectId,
+      databaseId,
+      credentials: cloudCredentials,
+    });
     auth = getAuth(app).tenantManager().authForTenant(tenantId);
-    bucket = getStorage(app).bucket(bucketName);
+    bucket = new Storage({ projectId, credentials: cloudCredentials }).bucket(
+      bucketName,
+    );
     phase = "create controlled identities";
     for (const [index, uid] of userIds.entries()) {
       await auth.createUser({
@@ -340,7 +358,15 @@ async function cleanup() {
     );
     check("follow alert and per-item notification ownership");
     phase = "conversation unread cutoffs";
+    // Record the deterministic path before the request, including the case where
+    // the server creates it but the response is lost or times out.
+    const expectedChatId = crypto
+      .createHash("sha256")
+      .update([a, b].sort().join(":"))
+      .digest("hex");
+    knownChatIds.add(expectedChatId);
     const chat = await call(a, "chat.open", { userId: b });
+    assert.equal(chat.id, expectedChatId);
     knownChatIds.add(chat.id);
     const first = await call(a, "chat.send", {
       id: chat.id,
