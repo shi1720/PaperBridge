@@ -1,5 +1,5 @@
 /* Explicitly opt-in production verification using two temporary tenant accounts.
- * No provider keys, emails, passwords, screenshots, traces, or persisted tokens.
+ * No provider keys, outbound emails, screenshots, traces, or persisted credentials.
  * Every mutation is restricted to freshly created fixture accounts and records.
  * Run only after deployment: node scripts/production-experience-smoke.cjs --run-live
  */
@@ -258,7 +258,6 @@ async function cleanup() {
       {
         projectId,
         storageBucket: bucketName,
-        serviceAccountId: `paperbridge-runtime@${projectId}.iam.gserviceaccount.com`,
         credential: {
           async getAccessToken() {
             const result = await getAccessToken(account.tokens.refresh_token, [
@@ -279,7 +278,7 @@ async function cleanup() {
       },
       runId,
     );
-    // The Admin Auth credential supports CLI token refresh and remote signing.
+    // The Admin Auth credential supports CLI token refresh.
     // Firestore/Storage Admin wrappers only accept certificate/ADC credentials,
     // so their native clients receive the existing user credential in memory.
     const cloudCredentials = {
@@ -299,21 +298,25 @@ async function cleanup() {
     );
     phase = "create controlled identities";
     for (const [index, uid] of userIds.entries()) {
+      const email = `${uid}@example.invalid`;
+      const password = crypto.randomBytes(32).toString("base64url");
       await auth.createUser({
         uid,
-        email: `${uid}@example.invalid`,
+        email,
+        password,
         emailVerified: true,
         displayName: `Temporary PaperBridge validation ${index + 1}`,
       });
       createdUsers.add(uid);
-      const customToken = await auth.createCustomToken(uid);
+      phase = "sign in controlled tenant fixture";
       const signed = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(apiKey)}`,
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            token: customToken,
+            email,
+            password,
             returnSecureToken: true,
             tenantId,
           }),
