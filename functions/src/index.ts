@@ -6,6 +6,7 @@ import { handleApi, deleteAccount } from "./api";
 import { DomainError } from "./domain";
 import { withAccountLease } from "./lifecycle";
 import { handleAI, aiEncryptionKey } from "./ai";
+import { queuePasswordReset } from "./password-reset";
 initializeApp();
 export {
   sendQueuedEmail as paperbridgeSendQueuedEmail,
@@ -21,6 +22,15 @@ export const paperbridgeApi = onCall(
     secrets: [aiEncryptionKey],
   },
   async (request) => {
+    if (request.data?.action === "auth.sendPasswordReset") {
+      return {
+        data: await queuePasswordReset(
+          request.data.email,
+          request.rawRequest.ip || "unknown",
+          aiEncryptionKey.value(),
+        ),
+      };
+    }
     if (!request.auth)
       throw new HttpsError("unauthenticated", "Sign in to continue.");
     assertAppTenant(request.auth.token);

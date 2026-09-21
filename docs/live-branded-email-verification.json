@@ -1,0 +1,90 @@
+{
+  "date": "2026-09-21",
+  "transport": "Brevo Free SMTP, deployed PaperBridge workers",
+  "smtpAccepted": 7,
+  "firstAttemptAccepted": 7,
+  "messages": [
+    {
+      "subject": "Reset your PaperBridge password",
+      "inbox": true,
+      "html": true,
+      "logo": true,
+      "plainText": true,
+      "button": true
+    },
+    {
+      "subject": "PaperBridge: withdrew the request",
+      "inbox": true,
+      "html": true,
+      "logo": true,
+      "plainText": true,
+      "button": true
+    },
+    {
+      "subject": "PaperBridge: request submitted",
+      "inbox": true,
+      "html": true,
+      "logo": true,
+      "plainText": true,
+      "button": true
+    },
+    {
+      "subject": "PaperBridge: started reviewing",
+      "inbox": true,
+      "html": true,
+      "logo": true,
+      "plainText": true,
+      "button": true
+    },
+    {
+      "subject": "PaperBridge: new review request",
+      "inbox": true,
+      "html": true,
+      "logo": true,
+      "plainText": true,
+      "button": true
+    },
+    {
+      "subject": "Verify your email for PaperBridge",
+      "inbox": true,
+      "html": true,
+      "logo": true,
+      "plainText": true,
+      "button": true
+    },
+    {
+      "subject": "Verify your email for PaperBridge",
+      "inbox": true,
+      "html": true,
+      "logo": true,
+      "plainText": true,
+      "button": true
+    }
+  ],
+  "verificationLinksRedeemed": 2,
+  "recovery": {
+    "deliveredCodeRedeemed": true,
+    "oldPasswordRejected": true,
+    "newPasswordAccepted": true,
+    "intendedAccountVerified": true
+  },
+  "previews": {
+    "types": [
+      "verification",
+      "recovery",
+      "review invitation"
+    ],
+    "widths": [
+      320,
+      390,
+      800
+    ],
+    "horizontalOverflow": false,
+    "imagesBlockedReadable": true
+  },
+  "limitations": [
+    "Gmail delivery and MIME were checked; previews are browser-rendered, not exhaustive Outlook/Apple Mail conformance.",
+    "Inbox placement is not guaranteed; a previous release check had one Spam result."
+  ],
+  "testDataCleaned": true
+}

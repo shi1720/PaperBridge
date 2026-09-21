@@ -31,3 +31,7 @@ Alternatives have additional constraints. Resend's `resend.dev` test sender send
 ## Credential maintenance
 
 The PaperBridge production key was created on September 21, 2026 and expires September 21, 2027. Brevo also expires SMTP keys after 90 days of inactivity. Rotate the dedicated key into a new `PAPERBRIDGE_SMTP_PASSWORD` secret version and redeploy both email workers before expiry. Never commit the key or expose it in client configuration. Inbox placement remains provider-dependent; the app preserves in-app notifications and directs users to check Spam for verification mail.
+
+## Branded messages
+
+Every outbox email uses the shared [PaperBridge email design](email-design.md), including app-initiated password recovery. The inline logo ships in the Functions archive; it is not loaded from an external image host. A text-only alternative and a copyable action link remain available.

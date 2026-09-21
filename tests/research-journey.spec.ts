@@ -285,3 +285,70 @@ test("two researchers complete a private manuscript and endorsement conversation
   await authorContext.close();
   await reviewerContext.close();
 });
+
+test("signed-out password recovery sends a branded link that changes only the intended account password", async ({
+  page,
+}) => {
+  const email = `recovery-${Date.now()}@example.test`;
+  const user = await getAuth().createUser({
+    email,
+    password: "Old-test-password-2026!",
+  });
+  try {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Forgot password?", exact: true })
+      .click();
+    await page.getByLabel("Email address").fill(email);
+    await page
+      .getByRole("button", { name: "Send reset link", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "If an account exists" }),
+    ).toBeVisible();
+    const jobs = await getFirestore()
+      .collection("emailOutbox")
+      .where("userId", "==", user.uid)
+      .get();
+    expect(jobs.size).toBe(1);
+    const job = jobs.docs[0].data();
+    expect(job.kind).toBe("auth-password-reset");
+    expect(job.presentation.actionLabel).toBe("Reset password");
+    const code = new URL(job.presentation.actionUrl).searchParams.get(
+      "oobCode",
+    );
+    expect(Boolean(code)).toBe(true);
+    const newPassword = "New-test-password-2026!";
+    const reset = await fetch(
+      "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=emulator-key",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ oobCode: code, newPassword }),
+      },
+    );
+    expect(reset.status).toBe(200);
+    const login = await fetch(
+      "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=emulator-key",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password: newPassword,
+          returnSecureToken: true,
+        }),
+      },
+    );
+    expect(login.status).toBe(200);
+    expect((await login.json()).localId).toBe(user.uid);
+  } finally {
+    await getAuth().deleteUser(user.uid);
+    const jobs = await getFirestore()
+      .collection("emailOutbox")
+      .where("userId", "==", user.uid)
+      .get();
+    for (const job of jobs.docs) await job.ref.delete();
+  }
+});

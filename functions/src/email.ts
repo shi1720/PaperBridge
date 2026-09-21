@@ -5,6 +5,8 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import nodemailer from "nodemailer";
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
+import { renderEmail, EMAIL_LOGO_CID } from "./email-template";
 import {
   emailLimits,
   MAX_EMAIL_ATTEMPTS,
@@ -101,7 +103,15 @@ export async function processEmailOutbox(
       from,
       to: job.to,
       subject: job.subject,
-      text: job.body,
+      ...renderEmail(job as any),
+      attachments: [
+        {
+          filename: "paperbridge-mark.png",
+          path: join(__dirname, "../assets/paperbridge-mark.png"),
+          cid: EMAIL_LOGO_CID,
+          contentDisposition: "inline",
+        },
+      ],
       replyTo: process.env.EMAIL_REPLY_TO || undefined,
       messageId: senderMessageId(id, from),
     });
