@@ -121,6 +121,7 @@ function ReportModal({
           <textarea
             autoFocus
             required
+            disabled={busy}
             minLength={10}
             maxLength={3000}
             rows={5}
@@ -246,6 +247,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
               <textarea
                 id="post-body"
                 required
+                disabled={busy}
                 maxLength={10000}
                 rows={4}
                 value={body}
@@ -257,6 +259,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                   arXiv paper link <span className="optional">optional</span>
                   <input
                     type="url"
+                    disabled={busy}
                     value={arxivUrl}
                     onChange={(e) => setArxivUrl(e.target.value)}
                     placeholder="https://arxiv.org/abs/…"
@@ -266,6 +269,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                   <label>
                     Attach a public manuscript
                     <select
+                      disabled={busy}
                       value={paperId}
                       onChange={(e) => setPaperId(e.target.value)}
                     >
@@ -593,6 +597,7 @@ function PostCard({
             <textarea
               id={"reply-" + post.id}
               required
+              disabled={!!busy}
               maxLength={5000}
               rows={2}
               value={comment}
@@ -760,7 +765,11 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
         description="A private place to ask, clarify, and build a working connection."
         action={
           profile ? (
-            <button className="button primary" onClick={() => setNewChat(true)}>
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={() => setNewChat(true)}
+            >
               <Plus size={16} />
               New conversation
             </button>
@@ -924,7 +933,7 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                       maxLength={10000}
                       rows={2}
                       value={draft}
-                      disabled={blocked || !chat}
+                      disabled={busy || blocked || !chat}
                       onChange={(e) => setDraft(e.target.value)}
                       placeholder={
                         blocked

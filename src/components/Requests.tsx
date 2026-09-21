@@ -425,6 +425,7 @@ export function RequestDetail() {
         <label className="form">
           A note for the other researcher
           <textarea
+            disabled={busy}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={4}
