@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 test("reader keeps drafts through zoom and supports searchable, resolved note discussions", async ({
   page,
@@ -36,6 +37,15 @@ test("reader keeps drafts through zoom and supports searchable, resolved note di
   await expect(note).toContainText("Compare a dense baseline");
   await note.getByRole("button", { name: "Resolve", exact: true }).click();
   await expect(note).toContainText("Resolved by");
+  const accessibility = await new AxeBuilder({ page })
+    .include(".pb-note-list")
+    .withTags(["wcag2a", "wcag2aa"])
+    .analyze();
+  expect(
+    accessibility.violations.filter((v) =>
+      ["serious", "critical"].includes(v.impact || ""),
+    ),
+  ).toEqual([]);
   await page.getByLabel("Filter notes", { exact: true }).selectOption("open");
   await expect(note).toHaveCount(0);
   await page

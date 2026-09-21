@@ -40,3 +40,9 @@ PaperBridge coordinates contact between authors and potential endorsers. Officia
 ## Follow-up validation
 
 Recruit independent authors and active endorsers for task-based testing. Observe category selection, comprehension of the arXiv handoff, confidence about manuscript visibility, and request triage. Do not treat this simulated review as proof of desirability, accessibility compliance, security, or production readiness. Those require separate evidence.
+
+## Shared workspace and community revision
+
+The subsequent review focused on three concrete gaps: email-centered follow-up, a limited PDF reader, and a community that could not carry research artifacts. The implemented changes keep each request's discussion, stage, manuscript versions and shared notes together; add PDF thumbnails, search, note replies and resolution; and support profile photos, community images/PDFs, post editing and saved discussions. The homepage describes these available workflows without fabricated researchers or outcomes.
+
+Code review and controlled browser journeys exposed and corrected access races, expired image preview recovery, unsaved profile field loss during photo changes, and stage-label contrast. Two separate accounts now exercise sharing, private-note isolation, replies, revision history and withdrawal. These are implementation checks, not interviews or evidence of adoption. Formatting review covers extracted structure and measured PDF diagnostics; the product explicitly states that it does not inspect figures or visual layout.

@@ -1,0 +1,49 @@
+{
+  "verifiedAt": "2026-09-21T12:29:20.705Z",
+  "scope": "Production callable, Cloud Storage media, and own controlled accounts",
+  "model": "gpt-6-astra",
+  "reasoningEffort": "medium",
+  "status": "completed",
+  "findings": {
+    "originality": 3,
+    "reviewer": 8,
+    "evidence": 7,
+    "formatting": 4,
+    "readiness": 9,
+    "synthesis": 9
+  },
+  "errors": [],
+  "checks": [
+    "Profile photo",
+    "Community image and PDF uploads",
+    "Short-lived signed media reads",
+    "Post edit and saved feed",
+    "Request-scoped notes/replies/resolution",
+    "In-app request discussion",
+    "Six-stage live AI review",
+    "Full extracted-text scope"
+  ],
+  "notificationEmailsAccepted": 3,
+  "homepageAccessibility": [
+    {
+      "viewport": 1440,
+      "seriousOrCriticalViolations": 0,
+      "horizontalOverflow": 0
+    },
+    {
+      "viewport": 390,
+      "seriousOrCriticalViolations": 0,
+      "horizontalOverflow": 0
+    }
+  ],
+  "browserVerifiedAt": "2026-09-21T12:32:25.076Z",
+  "browserChecks": [
+    "Production community images/PDF and desktop accessibility",
+    "Production manuscript, resolved note, shared reply and desktop accessibility",
+    "Production request activity and revision history accessibility",
+    "Production six-stage Astra report, export and desktop accessibility",
+    "Production AI report mobile accessibility",
+    "Production request workspace mobile accessibility"
+  ],
+  "browserErrors": []
+}

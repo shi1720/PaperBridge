@@ -774,8 +774,8 @@
   white-space: nowrap;
 }
 .pb-note-author > time {
-  font-size: 8px;
-  color: #68785c;
+  font-size: 10px;
+  color: #4f6245;
   margin-left: auto;
   white-space: nowrap;
 }
@@ -834,10 +834,10 @@
   font-weight: 600;
 }
 .pb-note-reply time {
-  font-size: 8px;
+  font-size: 10px;
   display: block;
   margin: 3px 0 6px;
-  color: #657957;
+  color: #4f6245;
 }
 .pb-note-reply p {
   font-size: 11px;
