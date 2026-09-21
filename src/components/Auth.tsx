@@ -25,7 +25,7 @@ export function AuthModal({
 }) {
   const { call, refreshProfile, toast } = useApp();
   const [mode, setMode] = useState<"signup" | "login" | "reset">("signup"),
-    [role, setRole] = useState("researcher"),
+    [role, setRole] = useState<"" | "researcher" | "endorser">(""),
     [name, setName] = useState(""),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
@@ -36,17 +36,21 @@ export function AuthModal({
   useEffect(() => {
     if (open) {
       setMode(initialMode);
-      setRole(initialRole);
       setError("");
       setSuccess("");
     }
   }, [open, initialRole, initialMode]);
+  useEffect(() => setRole(""), [initialRole]);
   async function finish() {
     await refreshProfile();
     onClose();
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (mode === "signup" && !role) {
+      setError("Choose researcher or endorser before creating your account.");
+      return;
+    }
     setBusy(true);
     setError("");
     setSuccess("");
@@ -67,7 +71,7 @@ export function AuthModal({
             name,
             role,
             headline: "",
-            institution: "Independent researcher",
+            institution: "",
             bio: "",
             categories: [],
             acceptingRequests: false,
@@ -94,6 +98,10 @@ export function AuthModal({
     }
   }
   async function google() {
+    if (mode === "signup" && !role) {
+      setError("Choose researcher or endorser before continuing with Google.");
+      return;
+    }
     setBusy(true);
     setGoogleBusy(true);
     setError("");
@@ -104,7 +112,9 @@ export function AuthModal({
       // Called directly from the button click to preserve browser user activation.
       const r = await signInWithPopup(auth, provider);
       const p = await call("profile.get");
-      if (!p)
+      // A first-time user can enter through Sign in too. Leave that profile
+      // uncreated until Onboarding collects an explicit role after OAuth.
+      if (!p && mode === "signup" && role)
         await call("profile.save", {
           profile: {
             name: r.user.displayName || "Researcher",
@@ -178,35 +188,49 @@ export function AuthModal({
         </button>
       </div>
       {mode === "signup" && (
-        <div className="role-options">
-          <button
-            type="button"
-            disabled={busy}
-            className={role === "researcher" ? "selected" : ""}
-            onClick={() => setRole("researcher")}
-          >
-            <Microscope />
-            <strong>I’m a researcher</strong>
-            <small>Find support for your work</small>
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            className={role === "endorser" ? "selected" : ""}
-            onClick={() => setRole("endorser")}
-          >
-            <GraduationCap />
-            <strong>I can help endorse</strong>
-            <small>Support emerging research</small>
-          </button>
-        </div>
+        <fieldset
+          className="auth-role-choice"
+          aria-describedby="auth-role-help"
+        >
+          <legend>Choose your role · required</legend>
+          <p id="auth-role-help" className="auth-role-help">
+            {role
+              ? `Selected: ${role === "endorser" ? "Researcher & endorser" : "Researcher"}. This role will be used for Google or email signup.`
+              : "Select researcher or endorser before continuing with Google or email. Endorsers can also use all researcher features."}
+          </p>
+          <div className="role-options">
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={role === "researcher"}
+              className={role === "researcher" ? "selected" : ""}
+              onClick={() => setRole("researcher")}
+            >
+              <Microscope />
+              <strong>I’m a researcher</strong>
+              <small>Find support for your work</small>
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={role === "endorser"}
+              className={role === "endorser" ? "selected" : ""}
+              onClick={() => setRole("endorser")}
+            >
+              <GraduationCap />
+              <strong>I can help endorse</strong>
+              <small>Researcher & endorser · Support emerging research</small>
+            </button>
+          </div>
+        </fieldset>
       )}
       {mode !== "reset" && googleAuthEnabled && (
         <>
           <button
             type="button"
             className="button google"
-            disabled={busy}
+            aria-describedby={mode === "signup" ? "auth-role-help" : undefined}
+            disabled={busy || (mode === "signup" && !role)}
             onClick={google}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
@@ -279,7 +303,10 @@ export function AuthModal({
           </label>
         )}
         {error && <ErrorBox message={error} />}
-        <button disabled={busy} className="button primary">
+        <button
+          disabled={busy || (mode === "signup" && !role)}
+          className="button primary"
+        >
           {busy
             ? "Please wait…"
             : mode === "signup"
@@ -328,9 +355,14 @@ export function Onboarding({ authOpen }: { authOpen: boolean }) {
     logout,
   } = useApp();
   const [name, setName] = useState(""),
-    [role, setRole] = useState("researcher"),
+    [role, setRole] = useState<"" | "researcher" | "endorser">(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  useEffect(() => {
+    setName(user?.displayName || "");
+    setRole("");
+    setError("");
+  }, [user?.uid, user?.displayName]);
   const open =
     serviceReady &&
     !!user &&
@@ -343,15 +375,19 @@ export function Onboarding({ authOpen }: { authOpen: boolean }) {
     <Modal
       open={open}
       onClose={() => {
-        void logout();
+        if (!busy) void logout();
       }}
       title="Let’s finish your research profile"
-      description="Your sign-in is ready. Add a name and role to complete your workspace."
+      description="Google or email sign-in is ready. Choose researcher or endorser to finish creating your account."
     >
       <form
         className="form"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (!role) {
+            setError("Choose researcher or endorser to complete your profile.");
+            return;
+          }
           setBusy(true);
           setError("");
           try {
@@ -359,7 +395,7 @@ export function Onboarding({ authOpen }: { authOpen: boolean }) {
               profile: {
                 name: name || user?.displayName || "Researcher",
                 role,
-                institution: "Independent researcher",
+                institution: "",
                 categories: [],
                 acceptingRequests: false,
                 weeklyCapacity: 2,
@@ -379,24 +415,40 @@ export function Onboarding({ authOpen }: { authOpen: boolean }) {
           <input
             required
             value={name}
+            disabled={busy}
             onChange={(e) => setName(e.target.value)}
             placeholder={user?.displayName || "Your name"}
             maxLength={100}
           />
         </label>
         <label>
-          Your role
-          <select value={role} onChange={(e) => setRole(e.target.value)}>
+          Your role · required
+          <select
+            required
+            disabled={busy}
+            value={role}
+            onChange={(e) =>
+              setRole(e.target.value as "" | "researcher" | "endorser")
+            }
+          >
+            <option value="" disabled>
+              Select researcher or endorser
+            </option>
             <option value="researcher">Researcher</option>
             <option value="endorser">Researcher & endorser</option>
           </select>
         </label>
         {error && <ErrorBox message={error} />}
-        <button className="button primary" disabled={busy}>
+        <button className="button primary" disabled={busy || !role}>
           {busy ? "Saving…" : "Complete profile"}
           <ArrowRight size={16} />
         </button>
-        <button type="button" className="text-link" onClick={logout}>
+        <button
+          type="button"
+          className="text-link"
+          disabled={busy}
+          onClick={logout}
+        >
           Sign out
         </button>
       </form>

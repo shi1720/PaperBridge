@@ -13,6 +13,10 @@ test("signup and privacy remain usable on a small phone, iPad and phone landscap
     await page
       .getByRole("button", { name: "Join as an endorser", exact: true })
       .click();
+    await expect(
+      page.getByRole("button", { name: "Create your account", exact: true }),
+    ).toBeDisabled();
+    await page.getByRole("button", { name: "I can help endorse" }).click();
     const name = page.getByLabel("Full name", { exact: true });
     await name.fill("Responsive signup check");
     const dialog = page.getByRole("dialog");
