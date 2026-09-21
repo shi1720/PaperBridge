@@ -1,0 +1,8 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All application reads and writes pass through the authenticated callable API.
+    // This keeps manuscript, message, provider-key and request authorization in one place.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

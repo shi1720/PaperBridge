@@ -1,0 +1,20 @@
+[
+  {
+    "origin": [
+      "https://paperbridge.web.app",
+      "https://paperbridge.firebaseapp.com",
+      "https://paperbridge-research.web.app",
+      "https://paperbridge-research.firebaseapp.com"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Range",
+      "Accept-Ranges",
+      "ETag",
+      "Range"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
