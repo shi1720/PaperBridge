@@ -4657,7 +4657,8 @@ textarea::placeholder {
   .app :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
   .modal
     :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
-    font-size: 16px;
+    /* This must survive the later-loaded component styles on touch screens. */
+    font-size: 16px !important;
     min-width: 0;
   }
 }
@@ -4681,10 +4682,7 @@ select {
 }
 
 select,
-.filter-select select,
-.pb-note-options select,
-.pb-reader-v2 .pb-note-options select,
-.pb-note-filters > select {
+.filter-select select {
   padding-right: 32px;
 }
 @media (forced-colors: active) {
