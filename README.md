@@ -55,7 +55,7 @@ npm run test:full
 
 `test:full` starts an isolated demo Firebase suite, tests the backend, then starts two Vite servers and executes browser flows. Stop previously running emulators first to avoid port conflicts. The backend integration suite intentionally resets the **demo-paperbridge emulator database**, never a live project. Do not run it against a development session containing data you need.
 
-The browser suite covers genuine two-account sign-up, verified role setup, PDF upload/rendering, category matching, request/feedback/withdrawal and loss of reviewer access; demo UI journeys and mobile layout; AI result rendering; and accessibility checks. Provider network calls are mocked in the automatic suite. A separately authorized four-stage live OpenAI test passed using a dynamically discovered model; Anthropic/Gemini have adapter tests but no live key was supplied.
+The browser suite covers genuine two-account sign-up, verified role setup, PDF upload/rendering, category matching, request/feedback/withdrawal and loss of reviewer access; demo UI journeys and mobile layout; AI result rendering; and accessibility checks. Provider network calls are mocked in the automatic suite. Separately authorized four-stage live OpenAI and complete browser-to-callable BYOK tests passed using a dynamically discovered model; Anthropic/Gemini have adapter tests but no live key was supplied.
 
 ## Deployment
 

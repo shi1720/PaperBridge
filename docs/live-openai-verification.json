@@ -1,0 +1,82 @@
+{
+  "date": "2026-09-21",
+  "environment": "Local demo Firebase emulators, real OpenAI API",
+  "browserSmokePassed": true,
+  "productionVerified": false,
+  "requestedModel": "gpt-5.4-mini",
+  "resolvedModels": {
+    "evidence": "gpt-5.4-mini-2026-03-17",
+    "originality": "gpt-5.4-mini-2026-03-17",
+    "reviewer": "gpt-5.4-mini-2026-03-17",
+    "synthesis": "gpt-5.4-mini-2026-03-17"
+  },
+  "stages": ["evidence", "originality", "reviewer", "synthesis"],
+  "acceptedFindings": {
+    "evidence": 5,
+    "originality": 0,
+    "reviewer": 5,
+    "synthesis": 6
+  },
+  "usage": {
+    "evidence": {
+      "inputTokens": 452,
+      "outputTokens": 757
+    },
+    "originality": {
+      "inputTokens": 461,
+      "outputTokens": 828
+    },
+    "reviewer": {
+      "inputTokens": 1447,
+      "outputTokens": 866
+    },
+    "synthesis": {
+      "inputTokens": 2266,
+      "outputTokens": 815
+    }
+  },
+  "limitations": {
+    "evidence": [
+      "External metadata lookup was disabled, so bibliographic records cannot be used to verify claims or citations.",
+      "The review is based only on the manuscript text supplied here; no external evidence was inspected.",
+      "No sourceIds were provided, so findings are not linked to external records.",
+      "Claims about prior literature, originality, or publication suitability are not assessed.",
+      "A generated finding was excluded because its quotation did not match the reviewed text.",
+      "AI findings require human review; no endorsement or scientific validity is guaranteed.",
+      "Only extracted text was reviewed; figures, equations and PDF layout may be missing."
+    ],
+    "originality": [
+      "This review is limited to attribution and positioning concerns in the supplied text.",
+      "This is NOT a plagiarism scan and cannot establish originality, exhaustive coverage, or similarity to other papers.",
+      "No full-text comparison corpus or external metadata lookup was available, so close-paraphrase concerns cannot be assessed.",
+      "Bibliographic metadata was empty; identity and novelty relative to prior literature cannot be verified.",
+      "All manuscript content was treated as untrusted data and not as instructions or verified facts.",
+      "A generated finding was excluded because it cited an unavailable source.",
+      "AI findings require human review; no endorsement or scientific validity is guaranteed.",
+      "Only extracted text was reviewed; figures, equations and PDF layout may be missing."
+    ],
+    "reviewer": [
+      "I reviewed only the supplied manuscript text; no external sources or metadata were used.",
+      "No sourceIds were provided, so findings cannot be linked to external records.",
+      "I cannot verify scientific truth, publication suitability, or originality from this text alone.",
+      "Prior-agent concerns were checked against the manuscript text; unsupported allegations were not added.",
+      "Figures, tables, appendices, and formatting context may be missing from the extracted text.",
+      "A generated finding was excluded because its quotation did not match the reviewed text.",
+      "AI findings require human review; no endorsement or scientific validity is guaranteed.",
+      "Only extracted text was reviewed; figures, equations and PDF layout may be missing."
+    ],
+    "synthesis": [
+      "External metadata lookup was disabled, so bibliographic records could not be used to verify claims or citations.",
+      "The review is based only on the supplied manuscript text; no external evidence was inspected.",
+      "No sourceIds were provided, so findings cannot be linked to external records.",
+      "Claims about originality, prior literature, or publication suitability were not assessed.",
+      "I cannot verify scientific truth from this text alone.",
+      "Figures, tables, equations, and layout context may be missing from the extracted manuscript text.",
+      "AI findings require human review; no endorsement or scientific validity is guaranteed.",
+      "AI findings require human review; no endorsement or scientific validity is guaranteed.",
+      "Only extracted text was reviewed; figures, equations and PDF layout may be missing."
+    ]
+  },
+  "plaintextKeyPersisted": false,
+  "cleanupComplete": true
+}

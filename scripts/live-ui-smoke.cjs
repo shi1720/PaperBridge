@@ -225,6 +225,9 @@ function progress(step) {
         findingCounts: Object.fromEntries(
           Object.entries(job.results).map(([n, r]) => [n, r.findings.length]),
         ),
+        limitations: Object.fromEntries(
+          Object.entries(job.results).map(([n, r]) => [n, r.limitations]),
+        ),
       }),
     );
     progress(
