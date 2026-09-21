@@ -80,9 +80,9 @@ async function register(
   expect(verification.status).not.toBe("sent");
   // An immediate resend displays the real cooldown and cannot create duplicate mail.
   await page.getByRole("button", { name: "Resend email", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText(
-    /wait|minute|try again/i,
-  );
+  await expect(
+    page.getByRole("status").filter({ hasText: /wait|minute|try again/i }),
+  ).toBeVisible();
   expect(
     (
       await getFirestore()
