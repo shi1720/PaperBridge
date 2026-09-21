@@ -42,6 +42,39 @@ test("review rejects invented quotations and fabricated source ids", () => {
   assert.equal(r.limitations.length, 2);
   assert.throws(() => c.parseReview("not json", "", new Set()));
 });
+test("PDF layout whitespace preserves valid quotes without accepting altered claims", () => {
+  const quote = "We ran five random seeds and report the best run.";
+  const finding = {
+    title: "Report all seeds",
+    severity: "medium",
+    quote,
+    explanation: "Best-run reporting omits variation.",
+    recommendation: "Report every run.",
+    sourceIds: [],
+  };
+  const manuscript =
+    "Method\nWe ran five random seeds\n and report the best\u00a0run.\nResults";
+  const result = c.parseReview(
+    JSON.stringify({
+      summary: "Review",
+      limitations: [],
+      findings: [
+        finding,
+        { ...finding, quote: quote.replace("five", "fifty") },
+        {
+          ...finding,
+          quote: "We ran five random seeds and report the mean run.",
+        },
+        { ...finding, quote: "We ran five random seeds…report the best run." },
+        { ...finding, sourceIds: ["invented-source"] },
+      ],
+    }),
+    manuscript,
+    new Set(),
+  );
+  assert.deepEqual(result.findings, [finding]);
+  assert.equal(result.limitations.length, 2);
+});
 test("long input visibly tracks truncation; DOI extraction bounded", () => {
   const e = c.manuscriptExcerpt("x".repeat(40000));
   assert.equal(e.text.length, 32000);

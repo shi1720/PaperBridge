@@ -279,6 +279,9 @@ export function parseReview(
     .slice(0, 12)
     .map((x: string) => x.slice(0, 1200));
   const findings = [];
+  // PDF extraction inserts layout whitespace inside otherwise verbatim passages.
+  // Preserve every non-whitespace character so paraphrases still fail validation.
+  const normalizedManuscript = manuscript.replace(/\s+/g, " ").trim();
   for (const f of v.findings.slice(0, 6)) {
     if (
       !f ||
@@ -286,7 +289,7 @@ export function parseReview(
         (k) => typeof f[k] === "string",
       ) ||
       !f.quote.trim() ||
-      !manuscript.includes(f.quote)
+      !normalizedManuscript.includes(f.quote.replace(/\s+/g, " ").trim())
     ) {
       limitations.push(
         "A generated finding was excluded because its quotation did not match the reviewed text.",
