@@ -467,7 +467,24 @@ footer span {
 }
 .button.google {
   width: 100%;
-  margin-top: 16px;
+  margin-top: 4px;
+  min-height: 48px;
+  background: white;
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--line);
 }
 .text-link {
   font-size: 13px;
