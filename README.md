@@ -4,7 +4,7 @@ A private-first research collaboration workspace for independent researchers and
 
 ## Release status
 
-The production homepage explains private manuscript review and endorsement connections, with separate researcher and endorser entry points. Fictional profiles and the interactive fixture are excluded from production; local development retains a labeled demo.
+The production homepage explains endorsement requests, category filters, researcher profiles, private manuscript collaboration, specialist AI review and the researcher social network, with separate researcher and endorser entry points. Fictional profiles and the interactive fixture are excluded from production; local development retains a labeled demo.
 
 [paperbridge.web.app](https://paperbridge.web.app) retains its original Hosting project. The backend is isolated in the owner's existing billed project, with a dedicated database, Auth tenant, bucket and runtime identity. Production email/password registration is enabled after live cloud checks and real Brevo SMTP delivery. Gmail received all six controlled messages: five in Inbox and one submission confirmation in Spam. See the [validation record](docs/validation.md) for verified outcomes.
 
@@ -14,7 +14,7 @@ The production homepage explains private manuscript review and endorsement conne
 - Private PDF manuscripts, revision history with immutable files and version-specific notes, PDF.js rendering, text selection and persistent highlights, page-aware private/shared notes, bounded text extraction.
 - Atomic endorsement requests with duplicate/capacity protection, private conversations, reviewing/change-request/offer/decline/withdrawal states, and author-reported arXiv completion.
 - Branded HTML/plain-text verification, password recovery and two-recipient review emails, with an embedded logo, durable SMTP outbox, retry/backoff and honest queued/sent/failed visibility.
-- Community feed, arXiv links, likes, comments, following, private chat, blocking, reporting and reported-contribution rankings.
+- Community feed, arXiv links, likes, comments, server-filtered following, researcher discovery and profile pages, private chat, actionable notifications, blocking, reporting and reported-contribution rankings.
 - Encrypted per-user OpenAI/Anthropic/Gemini keys; dynamic model catalogs; independently configured evidence, attribution and critical-reader agents; synthesis, optional Crossref metadata tools, exact-quote grounding, source audit, explicit consent, usage limits, and safe retry IDs.
 - Account exports, provider-key removal, profile privacy and deletion with token revocation, in-flight operation leases, anonymization and retryable cleanup.
 - Responsive layouts, keyboard-accessible dialogs, empty/error/loading states, CSP/security headers and automated browser/access-control tests.

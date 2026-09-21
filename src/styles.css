@@ -4512,3 +4512,55 @@ textarea::placeholder {
   color: #52684d;
   margin-bottom: 28px;
 }
+
+.researcher-name {
+  display: inline-block;
+  font-weight: 600;
+  color: var(--ink, #183e34);
+  text-underline-offset: 3px;
+}
+.researcher-name:hover {
+  text-decoration: underline;
+}
+.researcher-profile {
+  padding: 32px;
+  max-width: 850px;
+}
+.researcher-profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.researcher-profile-identity p {
+  margin: 5px 0 0;
+  color: #596950;
+}
+.researcher-profile h2 {
+  font-size: 23px;
+  margin-bottom: 14px;
+}
+.researcher-bio {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+  margin-bottom: 22px;
+}
+.researcher-profile .tags {
+  flex-wrap: wrap;
+}
+.researcher-profile .tag {
+  white-space: normal;
+}
+.researcher-links {
+  margin: 22px 0;
+  overflow-wrap: anywhere;
+}
+.researcher-profile .notice {
+  margin: 22px 0;
+}
+@media (max-width: 600px) {
+  .researcher-profile {
+    padding: 22px;
+  }
+}

@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+  useLocation,
+} from "react-router-dom";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -143,7 +148,8 @@ function ReportModal({
 export function Community({ onAuth }: { onAuth: () => void }) {
   const { profile, call, refresh, toast, demo } = useApp();
   const navigate = useNavigate();
-  const { data, error, loading } = useData("feed.list", {}, !!profile);
+  const location = useLocation();
+  const focusId = /^#post-([a-zA-Z0-9_-]+)$/.exec(location.hash)?.[1];
   const follows = useData("follow.list", {}, !!profile);
   const papers = useData("paper.list", {}, !!profile);
   const [tab, setTab] = useState<"all" | "following">("all"),
@@ -160,9 +166,15 @@ export function Community({ onAuth }: { onAuth: () => void }) {
       ? follows.data
       : list(follows.data?.following).map((f) => f.followingId)) as string[],
   );
-  const posts = list(data).filter(
-    (p) => tab === "all" || following.has(p.authorId),
+  const { data, error, loading } = useData(
+    "feed.list",
+    { following: tab === "following" },
+    !!profile && !focusId,
   );
+  const focused = useData("feed.get", { id: focusId }, !!profile && !!focusId);
+  const posts = focusId ? (focused.data ? [focused.data] : []) : list(data);
+  const feedError = focusId ? focused.error : error;
+  const feedLoading = focusId ? focused.loading : loading;
   async function publish(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -176,6 +188,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
       setBody("");
       setArxivUrl("");
       setPaperId("");
+      if (focusId) navigate("/community");
       refresh();
       toast(
         demo
@@ -214,14 +227,20 @@ export function Community({ onAuth }: { onAuth: () => void }) {
     <>
       <PageHeading
         eyebrow="THE RESEARCH COMMONS"
-        title="Ideas grow in conversation."
-        description="Share a question, a paper, or something you learned along the way."
+        title="Your research community."
+        description="Share papers and research updates, discuss ideas, follow researchers, and take the conversation into private messages."
         action={
           profile ? (
-            <button className="button" onClick={refresh}>
-              <RefreshCw size={16} />
-              Refresh
-            </button>
+            <div className="button-row">
+              <Link className="button primary" to="/researchers">
+                <Users size={16} />
+                Find researchers
+              </Link>
+              <button className="button" onClick={refresh}>
+                <RefreshCw size={16} />
+                Refresh
+              </button>
+            </div>
           ) : undefined
         }
       />
@@ -239,6 +258,12 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                 <div>
                   <strong>What are you working on?</strong>
                   <small>A question can be the start of a collaboration.</small>
+                  <Link
+                    className="text-link"
+                    to={"/researchers/" + encodeURIComponent(profile.id)}
+                  >
+                    View your research profile
+                  </Link>
                 </div>
               </div>
               <label className="sr-only" htmlFor="post-body">
@@ -300,6 +325,14 @@ export function Community({ onAuth }: { onAuth: () => void }) {
               </div>
               {composeError && <ErrorBox message={composeError} />}
             </form>
+            {focusId && (
+              <div className="notice">
+                <strong>Discussion from your notification</strong>
+                <Link className="text-link" to="/community">
+                  Back to the community feed <ArrowRight size={15} />
+                </Link>
+              </div>
+            )}
             <div className="social-feed-heading">
               <div
                 className="category-tabs"
@@ -308,30 +341,37 @@ export function Community({ onAuth }: { onAuth: () => void }) {
               >
                 <button
                   className={tab === "all" ? "active" : ""}
-                  onClick={() => setTab("all")}
+                  onClick={() => {
+                    setTab("all");
+                    if (focusId) navigate("/community");
+                  }}
                 >
                   Community
                 </button>
                 <button
                   className={tab === "following" ? "active" : ""}
-                  onClick={() => setTab("following")}
+                  onClick={() => {
+                    setTab("following");
+                    if (focusId) navigate("/community");
+                  }}
                 >
                   Following <span>{following.size}</span>
                 </button>
               </div>
               <span className="muted">Latest conversations</span>
             </div>
-            {error && <ErrorBox message={error} />}{" "}
+            {feedError && <ErrorBox message={feedError} />}{" "}
             {tab === "following" && follows.error && (
               <ErrorBox message={follows.error} />
             )}{" "}
-            {loading && !data ? (
+            {feedLoading ? (
               <Loading />
-            ) : posts.length ? (
+            ) : feedError ? null : posts.length ? (
               posts.map((post) => (
                 <PostCard
                   key={post.id}
                   post={post}
+                  openDiscussion={!!focusId}
                   following={following.has(post.authorId)}
                   onFollow={async () => {
                     await call("follow.toggle", { id: post.authorId });
@@ -344,7 +384,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                   onMessage={() => message(post.authorId)}
                 />
               ))
-            ) : (
+            ) : !feedError ? (
               <Empty
                 title={
                   tab === "following"
@@ -353,7 +393,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                 }
                 action={
                   tab === "following" ? (
-                    <Link className="button" to="/discover">
+                    <Link className="button" to="/researchers">
                       Discover researchers <ArrowRight size={16} />
                     </Link>
                   ) : (
@@ -372,7 +412,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                   ? "Posts from the researchers you follow will appear here."
                   : "A good question, an interesting preprint, a lesson learned: make room for someone else to build on it."}
               </Empty>
-            )}
+            ) : null}
           </section>
           <aside className="right-rail">
             <section className="rail-card">
@@ -388,7 +428,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                 <strong>{following.size}</strong>
                 <span>researchers you follow</span>
               </div>
-              <Link to="/discover" className="text-link">
+              <Link to="/researchers" className="text-link">
                 Find your people <ArrowUpRight size={16} />
               </Link>
             </section>
@@ -441,6 +481,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
 function PostCard({
   post,
   following,
+  openDiscussion = false,
   onFollow,
   onReport,
   onDelete,
@@ -448,13 +489,14 @@ function PostCard({
 }: {
   post: Row;
   following: boolean;
+  openDiscussion?: boolean;
   onFollow: () => Promise<void>;
   onReport: () => void;
   onDelete: () => void;
   onMessage: () => void;
 }) {
   const { profile, call, refresh } = useApp();
-  const [open, setOpen] = useState(false),
+  const [open, setOpen] = useState(openDiscussion),
     [comment, setComment] = useState(""),
     [busy, setBusy] = useState(""),
     [error, setError] = useState("");
@@ -479,12 +521,17 @@ function PostCard({
     });
   }
   return (
-    <article className="card social-post">
+    <article className="card social-post" id={"post-" + post.id}>
       <header className="social-post-header">
         <div className="social-author">
           <Avatar name={post.authorName || "Researcher"} />
           <div>
-            <strong>{post.authorName || "Researcher"}</strong>
+            <Link
+              className="researcher-name"
+              to={"/researchers/" + encodeURIComponent(post.authorId)}
+            >
+              {post.authorName || "Researcher"}
+            </Link>
             {post.authorHeadline && <small>{post.authorHeadline}</small>}
             <time dateTime={new Date(post.createdAt).toISOString()}>
               {time(post.createdAt)}
@@ -580,7 +627,12 @@ function PostCard({
               <div className="social-comment" key={c.id}>
                 <Avatar name={c.authorName || "Researcher"} />
                 <div>
-                  <strong>{c.authorName || "Researcher"}</strong>
+                  <Link
+                    className="researcher-name"
+                    to={"/researchers/" + encodeURIComponent(c.authorId)}
+                  >
+                    {c.authorName || "Researcher"}
+                  </Link>
                   <p>{c.body}</p>
                   <time>{time(c.createdAt)}</time>
                 </div>
@@ -623,7 +675,7 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("chat") || "";
   const chats = useData("chat.list", {}, !!profile);
-  const people = useData("directory.list", {}, !!profile);
+  const people = useData("directory.list", { scope: "researchers" }, !!profile);
   const blocks = useData("block.list", {}, !!profile && !demo);
   const [messages, setMessages] = useState<Row[]>([]),
     [messageError, setMessageError] = useState(""),
@@ -1099,7 +1151,7 @@ export function Impact() {
         <Empty
           title="Meet the people making a difference"
           action={
-            <Link className="button" to="/discover">
+            <Link className="button" to="/researchers">
               Explore the community <ArrowRight size={16} />
             </Link>
           }
@@ -1192,7 +1244,7 @@ export function Impact() {
               <Empty
                 title="The first contributions are still ahead"
                 action={
-                  <Link className="button" to="/discover">
+                  <Link className="button" to="/researchers">
                     Make a connection <ArrowRight size={16} />
                   </Link>
                 }

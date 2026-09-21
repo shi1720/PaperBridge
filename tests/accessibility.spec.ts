@@ -6,6 +6,8 @@ const routes = [
   "requests",
   "papers",
   "community",
+  "researchers",
+  "researchers/demo-1",
   "review",
   "settings",
   "impact",

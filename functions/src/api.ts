@@ -3,6 +3,7 @@ import { getDb, getAppAuth, getPaperBucket, assertAppTenant } from "./runtime";
 import { paperListItem } from "./dto";
 import {
   FieldValue,
+  FieldPath,
   DocumentReference,
   Transaction,
   WriteBatch,
@@ -425,10 +426,16 @@ async function dispatchApi(
     }
     case "directory.list": {
       const blocked = await hiddenUsers(uid);
+      if (
+        input.scope !== undefined &&
+        !["endorsers", "researchers"].includes(input.scope)
+      )
+        fail("invalid-argument", "Choose a valid directory scope.");
       let query: Query = db()
         .collection("profiles")
-        .where("role", "==", "endorser")
         .where("publicProfile", "==", true);
+      if (input.scope !== "researchers")
+        query = query.where("role", "==", "endorser");
       if (input.category)
         query = query.where(
           "categories",
@@ -946,22 +953,78 @@ async function dispatchApi(
       return { deleted: true };
     }
     case "feed.list": {
-      const blocked = await hiddenUsers(uid);
-      const all = rows(
-        await db()
-          .collection("posts")
-          .orderBy("createdAt", "desc")
-          .limit(100)
-          .get(),
+      if (input.following !== undefined && typeof input.following !== "boolean")
+        fail("invalid-argument", "Following must be true or false.");
+      const limit = Math.floor(
+        D.number(input.limit ?? 100, "Feed limit", 1, 100),
       );
-      const likes = await db()
-        .collection("likes")
-        .where("userId", "==", uid)
-        .get();
-      const liked = new Set(likes.docs.map((d) => d.data().postId));
-      return all
+      const cursor =
+        input.cursor == null
+          ? null
+          : {
+              createdAt: D.number(
+                input.cursor.createdAt,
+                "Cursor date",
+                0,
+                Number.MAX_SAFE_INTEGER,
+              ),
+              id: D.identifier(input.cursor.id),
+            };
+      const blocked = await hiddenUsers(uid);
+      const page = (query: Query) => {
+        query = query
+          .orderBy("createdAt", "desc")
+          .orderBy(FieldPath.documentId(), "desc");
+        if (cursor) query = query.startAfter(cursor.createdAt, cursor.id);
+        return query.limit(limit).get();
+      };
+      let all: any[];
+      if (input.following === true) {
+        // Creation caps follows at 300: at most ten 30-author queries and 1,000 post reads.
+        // Existing imports beyond that supported cap are bounded to the first 300 follows.
+        const following = await db()
+          .collection("follows")
+          .where("followerId", "==", uid)
+          .limit(300)
+          .get();
+        const ids = [
+          ...new Set(following.docs.map((d) => d.data().followingId as string)),
+        ].filter((id) => !blocked.has(id));
+        if (!ids.length) return [];
+        const batches: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+        for (let i = 0; i < ids.length; i += 30)
+          batches.push(
+            page(
+              db()
+                .collection("posts")
+                .where("authorId", "in", ids.slice(i, i + 30)),
+            ),
+          );
+        all = (await Promise.all(batches)).flatMap(rows);
+      } else all = rows(await page(db().collection("posts")));
+      all = all
         .filter((p: any) => !blocked.has(p.authorId))
-        .map((p: any) => ({ ...publicPost(p), liked: liked.has(p.id) }));
+        .sort(
+          (a, b) =>
+            b.createdAt - a.createdAt ||
+            (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+        )
+        .slice(0, limit);
+      if (!all.length) return [];
+      const likes = await db().getAll(
+        ...all.map((p) => doc("likes", hash(`${uid}:${p.id}`))),
+      );
+      return all.map((p, index) => ({
+        ...publicPost(p),
+        liked: likes[index].exists,
+      }));
+    }
+    case "feed.get": {
+      const id = D.identifier(input.id);
+      const post = await required("posts", id);
+      await ensureUnblocked(uid, post.authorId);
+      const like = await doc("likes", hash(`${uid}:${id}`)).get();
+      return { ...publicPost(post), liked: like.exists };
     }
     case "feed.post": {
       const p = await profile(uid);
@@ -1060,7 +1123,7 @@ async function dispatchApi(
           post.authorId,
           "New comment",
           `${p.name} commented on your post.`,
-          "/feed",
+          `/community#post-${id}`,
           Date.now(),
         );
       await batch.commit();
@@ -1081,21 +1144,47 @@ async function dispatchApi(
     case "follow.toggle": {
       const id = D.identifier(input.id);
       if (id === uid) fail("invalid-argument", "You cannot follow yourself.");
-      await ensureUnblocked(uid, id);
-      const target = await profile(id);
-      if (!target.publicProfile)
-        fail("permission-denied", "This profile is private.");
       const ref = doc("follows", hash(`${uid}:${id}`));
       return db().runTransaction(async (tx) => {
         const snap = await tx.get(ref);
-        if (snap.exists) tx.delete(ref);
-        else
-          tx.create(ref, {
-            followerId: uid,
-            followingId: id,
-            createdAt: Date.now(),
-          });
-        return { following: !snap.exists };
+        // Unfollowing remains possible when the target becomes private, blocks the caller or is removed.
+        if (snap.exists) {
+          tx.delete(ref);
+          return { following: false };
+        }
+        const [target, outgoingBlock, incomingBlock, following] =
+          await Promise.all([
+            tx.get(doc("profiles", id)),
+            tx.get(doc("blocks", blockId(uid, id))),
+            tx.get(doc("blocks", blockId(id, uid))),
+            tx.get(
+              db()
+                .collection("follows")
+                .where("followerId", "==", uid)
+                .limit(300),
+            ),
+          ]);
+        if (
+          !target.exists ||
+          !target.data()?.publicProfile ||
+          outgoingBlock.exists ||
+          incomingBlock.exists
+        )
+          fail(
+            "permission-denied",
+            "This researcher is unavailable to follow.",
+          );
+        if (following.size >= 300)
+          fail(
+            "resource-exhausted",
+            "You can follow up to 300 researchers. Unfollow someone before adding another.",
+          );
+        tx.create(ref, {
+          followerId: uid,
+          followingId: id,
+          createdAt: Date.now(),
+        });
+        return { following: true };
       });
     }
     case "follow.list": {
@@ -1180,7 +1269,7 @@ async function dispatchApi(
         otherId,
         "New message",
         `${chat.names[uid] || "A researcher"} sent you a message.`,
-        `/messages/${id}`,
+        `/messages?chat=${id}`,
         now,
       );
       await batch.commit();

@@ -78,6 +78,16 @@ export function SettingsPage({ onAuth }: { onAuth: () => void }) {
         eyebrow="MAKE YOURSELF AT HOME"
         title="Your research. Your choices."
         description="Shape your profile, set your availability, and keep control of your data."
+        action={
+          profile ? (
+            <Link
+              className="button"
+              to={"/researchers/" + encodeURIComponent(profile.id)}
+            >
+              View your profile <ArrowUpRight size={16} />
+            </Link>
+          ) : undefined
+        }
       />
       <div className="tabs">
         {[

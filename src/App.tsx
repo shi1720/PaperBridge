@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from "react";
 import {
+  Link,
   NavLink,
   Route,
   Routes,
@@ -30,6 +31,7 @@ import { useApp, useData } from "./lib/context";
 import { Avatar, Modal, Empty, Loading } from "./components/ui";
 import { AuthModal, Onboarding } from "./components/Auth";
 import { Discover } from "./components/Discover";
+import { notificationPath } from "./lib/notifications";
 import { Landing } from "./components/Landing";
 const Papers = lazy(() =>
   import("./components/Papers").then((m) => ({ default: m.Papers })),
@@ -45,6 +47,16 @@ const RequestDetail = lazy(() =>
 );
 const Community = lazy(() =>
   import("./components/Social").then((m) => ({ default: m.Community })),
+);
+const Researchers = lazy(() =>
+  import("./components/ResearcherProfile").then((m) => ({
+    default: m.Researchers,
+  })),
+);
+const ResearcherProfile = lazy(() =>
+  import("./components/ResearcherProfile").then((m) => ({
+    default: m.ResearcherProfile,
+  })),
 );
 const Messages = lazy(() =>
   import("./components/Social").then((m) => ({ default: m.Messages })),
@@ -353,6 +365,14 @@ export default function App() {
                 element={<Community onAuth={requireAuth} />}
               />
               <Route
+                path="/researchers"
+                element={<Researchers onAuth={requireAuth} />}
+              />
+              <Route
+                path="/researchers/:id"
+                element={<ResearcherProfile onAuth={requireAuth} />}
+              />
+              <Route
                 path="/messages"
                 element={<Messages onAuth={requireAuth} />}
               />
@@ -525,6 +545,15 @@ function Notifications({
               <div>
                 <strong>{n.title || "Research update"}</strong>
                 <p>{n.body}</p>
+                {notificationPath(n.link) && (
+                  <Link
+                    className="text-link"
+                    to={notificationPath(n.link)!}
+                    onClick={onClose}
+                  >
+                    Open update <ArrowRight size={14} />
+                  </Link>
+                )}
                 {n.emailStatus && (
                   <small className="email-status">
                     Email:{" "}
