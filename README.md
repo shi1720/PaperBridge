@@ -47,7 +47,7 @@ Start Vite in another terminal with `VITE_FIREBASE_AUTH_TENANT_ID=` (empty), `VI
 
 ```sh
 npm run check
-npx playwright install chromium
+npx playwright install --with-deps chromium webkit
 npm run test:full
 ```
 

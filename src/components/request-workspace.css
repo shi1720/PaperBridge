@@ -260,3 +260,13 @@
     font-size: 22px;
   }
 }
+
+.workspace-activity p,
+.request-document-heading h2 {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1024px) {
+  .workspace-navigation button {
+    min-height: 44px;
+  }
+}

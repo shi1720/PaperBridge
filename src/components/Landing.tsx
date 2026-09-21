@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -21,6 +22,8 @@ import {
   Bookmark,
   LayoutList,
   ScanSearch,
+  Menu,
+  X,
 } from "lucide-react";
 import { serviceReady } from "../lib/firebase";
 import "./landing.css";
@@ -128,14 +131,29 @@ export function Landing({
   onSignIn: () => void;
   onPrivacy: () => void;
 }) {
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const navigationToggle = useRef<HTMLButtonElement>(null);
   return (
     <div className="landing">
-      <header className="landing-header">
+      <header
+        className="landing-header"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && navigationOpen) {
+            setNavigationOpen(false);
+            navigationToggle.current?.focus();
+          }
+        }}
+      >
         <Link to="/" className="brand" aria-label="PaperBridge home">
           <BookOpen size={27} />
           paperbridge<span className="brand-period">.</span>
         </Link>
-        <nav aria-label="Public navigation">
+        <nav
+          id="public-section-navigation"
+          aria-label="Public navigation"
+          className={navigationOpen ? "is-open" : undefined}
+          onClick={() => setNavigationOpen(false)}
+        >
           <a href="#how-it-works">Endorsement requests</a>
           <a href="#ai-review">AI review</a>
           <a href="#community">Community</a>
@@ -143,6 +161,17 @@ export function Landing({
         </nav>
         <button className="button lp-signin" onClick={onSignIn}>
           Sign in <ArrowUpRight size={16} />
+        </button>
+        <button
+          className="lp-nav-toggle"
+          ref={navigationToggle}
+          type="button"
+          aria-label={navigationOpen ? "Close navigation" : "Open navigation"}
+          aria-expanded={navigationOpen}
+          aria-controls="public-section-navigation"
+          onClick={() => setNavigationOpen((open) => !open)}
+        >
+          {navigationOpen ? <X size={21} /> : <Menu size={21} />}
         </button>
       </header>
       <section className="landing-hero">

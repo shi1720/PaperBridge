@@ -8,7 +8,13 @@ const env = {
 };
 for (const args of [
   ["--prefix", "functions", "run", "test:integration"],
-  ["run", "test:e2e"],
+  [
+    "run",
+    "test:e2e",
+    ...(process.env.E2E_PROJECT
+      ? ["--", `--project=${process.env.E2E_PROJECT}`]
+      : []),
+  ],
 ]) {
   const r = spawnSync("npm", args, { stdio: "inherit", env });
   if (r.status !== 0) process.exit(r.status || 1);
