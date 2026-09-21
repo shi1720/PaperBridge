@@ -10,19 +10,30 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
 if (!getApps().length) initializeApp({ projectId: "demo-paperbridge" });
 
+test.beforeEach(async ({ context }) => {
+  // The emulator's optional Material theme/fonts must not make local auth depend
+  // on third-party CDNs. Its actual provider form and token exchange still run.
+  await context.route(
+    /^https:\/\/(unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//,
+    (route) => route.abort(),
+  );
+});
+
 async function googlePopup(page: Page) {
   const pending = page.waitForEvent("popup");
   await page
     .getByRole("button", { name: "Continue with Google", exact: true })
     .click();
-  return pending;
+  const popup = await pending;
+  await expect(popup.locator("#title")).toContainText("Google.com");
+  return popup;
 }
 
 test("Google creates the chosen role and returning sign-in preserves the workspace", async ({
   page,
 }) => {
   const email = `google-${Date.now()}@example.test`;
-  await page.goto("/");
+  await page.goto("http://127.0.0.1:5174/");
   await page
     .getByRole("button", { name: "Join as an endorser", exact: true })
     .click();
@@ -67,7 +78,7 @@ test("Google creates the chosen role and returning sign-in preserves the workspa
 test("cancelling Google sign-in leaves email sign-in available", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("http://127.0.0.1:5174/");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   const popup = await googlePopup(page);
   await popup.close();
