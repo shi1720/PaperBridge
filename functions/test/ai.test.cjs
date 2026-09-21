@@ -75,6 +75,34 @@ test("PDF layout whitespace preserves valid quotes without accepting altered cla
   assert.deepEqual(result.findings, [finding]);
   assert.equal(result.limitations.length, 2);
 });
+test("presentation quote marks are removed only around a verified excerpt", () => {
+  const quote = "We ran five random seeds and report the best run.";
+  const finding = {
+    title: "Concern",
+    severity: "medium",
+    quote,
+    explanation: "Report variability",
+    recommendation: "Show all runs",
+    sourceIds: [],
+  };
+  const result = c.parseReview(
+    JSON.stringify({
+      summary: "Review",
+      limitations: [],
+      findings: [
+        { ...finding, quote: '"' + quote + '"' },
+        { ...finding, quote: "“" + quote + "”" },
+        { ...finding, quote: "“" + quote.replace("five", "fifty") + "”" },
+        { ...finding, quote: "“" + quote + '"' },
+        { ...finding, quote: '""' },
+      ],
+    }),
+    quote,
+    new Set(),
+  );
+  assert.deepEqual(result.findings, [finding, finding]);
+  assert.equal(result.limitations.length, 1);
+});
 test("long input visibly tracks truncation; DOI extraction bounded", () => {
   const e = c.manuscriptExcerpt("x".repeat(40000));
   assert.equal(e.text.length, 32000);
