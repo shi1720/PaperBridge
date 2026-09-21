@@ -264,7 +264,7 @@ async function review(uid: string, data: any) {
     errors: [],
     inputHash: createHash("sha256").update(excerpt.text).digest("hex"),
     paperUpdatedAt: paper.updatedAt || null,
-    promptVersion: "2026-09-21.1",
+    promptVersion: "2026-09-21.2",
   };
   delete initial.scope.text;
   const created = await db().runTransaction(async (tx) => {
@@ -314,6 +314,7 @@ async function review(uid: string, data: any) {
       title: String(paper.title || ""),
       scope: initial.scope,
       bibliographicMetadata: metadata.sources,
+      allowedSourceIds: [...sourceIds],
       metadataLimitations: metadata.limitations,
     };
     for (const name of [...AGENTS, "synthesis"] as const) {
