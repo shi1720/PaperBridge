@@ -37,6 +37,22 @@ test("Google creates the chosen role and returning sign-in preserves the workspa
   await page
     .getByRole("button", { name: "Join as an endorser", exact: true })
     .click();
+  const googleButton = page.getByRole("button", {
+    name: "Continue with Google",
+    exact: true,
+  });
+  await expect(googleButton).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Create your account", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "I’m a researcher" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  const endorser = page.getByRole("button", { name: "I can help endorse" });
+  await expect(endorser).toHaveAttribute("aria-pressed", "false");
+  await endorser.click();
+  await expect(endorser).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText(/Selected: Researcher & endorser/)).toBeVisible();
   const popup = await googlePopup(page);
   await popup.getByRole("button", { name: "Add new account" }).click();
   await popup.locator("#email-input").fill(email);
@@ -91,4 +107,54 @@ test("cancelling Google sign-in leaves email sign-in available", async ({
     page.getByRole("button", { name: "Continue with Google", exact: true }),
   ).toBeEnabled();
   await expect(page.getByLabel("Email address")).toBeEditable();
+});
+
+test("first Google login requires an explicit role after OAuth, including after reload", async ({
+  page,
+}) => {
+  const email = `google-onboarding-${Date.now()}@example.test`;
+  await page.goto("http://127.0.0.1:5174/");
+  await page
+    .getByRole("button", { name: "Create your research profile", exact: true })
+    .click();
+  await page.getByRole("button", { name: "I can help endorse" }).click();
+  // A previously selected signup role must not silently carry into Sign in.
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  const popup = await googlePopup(page);
+  await popup.getByRole("button", { name: "Add new account" }).click();
+  await popup.locator("#email-input").fill(email);
+  await popup.locator("#display-name-input").fill("New Google Researcher");
+  await popup.locator("#sign-in").click();
+  const onboarding = page.getByRole("dialog", {
+    name: "Let’s finish your research profile",
+  });
+  await expect(onboarding).toBeVisible();
+  const user = await getAuth().getUserByEmail(email);
+  const profile = getFirestore().doc(`profiles/${user.uid}`);
+  expect((await profile.get()).exists).toBe(false);
+  await expect(onboarding.getByLabel("Your role · required")).toHaveValue("");
+  await expect(
+    onboarding.getByRole("button", { name: "Complete profile", exact: true }),
+  ).toBeDisabled();
+  await expect(onboarding.getByLabel("Full name", { exact: true })).toHaveValue(
+    "New Google Researcher",
+  );
+  await page.reload();
+  await expect(onboarding).toBeVisible();
+  await expect(onboarding.getByLabel("Your role · required")).toHaveValue("");
+  expect((await profile.get()).exists).toBe(false);
+  await onboarding
+    .getByLabel("Your role · required")
+    .selectOption("researcher");
+  await onboarding
+    .getByRole("button", { name: "Complete profile", exact: true })
+    .click();
+  await expect(page.locator(".account strong")).toHaveText(
+    "New Google Researcher",
+  );
+  expect((await profile.get()).data()).toMatchObject({
+    name: "New Google Researcher",
+    role: "researcher",
+    institution: "",
+  });
 });

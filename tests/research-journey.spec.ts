@@ -46,8 +46,11 @@ async function register(
   await page
     .getByRole("button", { name: "Create your research profile", exact: true })
     .click();
-  if (endorser)
-    await page.getByRole("button", { name: "I can help endorse" }).click();
+  await page
+    .getByRole("button", {
+      name: endorser ? "I can help endorse" : "I’m a researcher",
+    })
+    .click();
   await page.getByLabel("Full name", { exact: true }).fill(name);
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel(/Password/).fill("PaperBridge-test-2026!");

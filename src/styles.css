@@ -1389,6 +1389,23 @@ footer span {
   color: #687e53;
   box-shadow: 0 1px 4px #547a2010;
 }
+.auth-role-choice {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.auth-role-choice legend {
+  font-size: 14px;
+  font-weight: 600;
+  color: #203f36;
+}
+.auth-role-help {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #526448;
+  margin: 8px 0 14px;
+}
 .role-options {
   display: flex;
   gap: 13px;
@@ -1404,12 +1421,12 @@ footer span {
   flex-direction: column;
   gap: 9px;
   background: white;
-  color: #95a187;
+  color: #526448;
 }
 .role-options > button.selected {
   border-color: #9cae82;
   background: #f0f5e8;
-  color: #6f8950;
+  color: #254535;
 }
 .role-options strong {
   font-size: 12px;

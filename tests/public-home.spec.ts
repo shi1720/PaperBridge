@@ -10,6 +10,7 @@ test("account entry exposes privacy details and preserves the signup intent", as
   await page
     .getByRole("button", { name: "Join as an endorser", exact: true })
     .click();
+  await page.getByRole("button", { name: "I can help endorse" }).click();
   const policy = page.getByRole("button", {
     name: "Read guidelines & privacy",
     exact: true,
@@ -109,7 +110,7 @@ test("public home explains the real workflow without invented activity", async (
   } else {
     await expect(
       dialog.getByRole("button", { name: "I’m a researcher" }),
-    ).toHaveClass(/selected/);
+    ).toHaveAttribute("aria-pressed", "false");
   }
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await page
@@ -120,7 +121,7 @@ test("public home explains the real workflow without invented activity", async (
   ) {
     await expect(
       dialog.getByRole("button", { name: "I can help endorse" }),
-    ).toHaveClass(/selected/);
+    ).toHaveAttribute("aria-pressed", "false");
   }
 });
 
