@@ -1,0 +1,8 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // All uploads go through the tenant-aware HTTP endpoint. Readers receive
+    // short-lived server-signed URLs after manuscript authorization.
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

@@ -1,0 +1,54 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 2384 >>
+stream
+BT /F1 10 Tf 0.15 0.22 0.17 rg 50 740 Td (PaperBridge | FICTIONAL DEMONSTRATION MANUSCRIPT) Tj ET
+BT /F1 20 Tf 0.15 0.22 0.17 rg 50 690 Td (Sparse pathways for interpretable language models) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 660 Td (Alex Morgan | Independent researcher) Tj ET
+BT /F1 12 Tf 0.15 0.22 0.17 rg 50 612 Td (ABSTRACT) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 590 Td (We investigate sparse activation pathways in compact language models.) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 570 Td (This fictional manuscript demonstrates private review and annotations.) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 550 Td (The example study compares two synthetic benchmarks. No real research) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 530 Td (result is claimed, and this document should not be cited as evidence.) Tj ET
+BT /F1 12 Tf 0.15 0.22 0.17 rg 50 480 Td (1. RESEARCH QUESTION) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 458 Td (Can a constrained activation pathway help a reader understand which) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 438 Td (features influence a model output? Interpretability is treated as a) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 418 Td (measurable research question, rather than a guarantee of correctness.) Tj ET
+BT /F1 12 Tf 0.15 0.22 0.17 rg 50 368 Td (2. PROPOSED EVALUATION) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 346 Td (Compare a sparse pathway with a dense baseline under matched training) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 326 Td (conditions. Report uncertainty across seeds, ablate the sparsity budget,) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 306 Td (and test whether results transfer beyond the synthetic benchmarks.) Tj ET
+BT /F1 12 Tf 0.15 0.22 0.17 rg 50 256 Td (3. LIMITATIONS AND OPEN QUESTIONS) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 234 Td (Two synthetic benchmarks cannot establish general performance.) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 214 Td (External evaluation, stronger baselines, and human assessment remain) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 194 Td (necessary. Correlation between sparsity and interpretation does not) Tj ET
+BT /F1 11 Tf 0.15 0.22 0.17 rg 50 174 Td (establish a causal relationship.) Tj ET
+BT /F1 10 Tf 0.15 0.22 0.17 rg 50 106 Td (Select a sentence to highlight it and add a private or shared note.) Tj ET
+BT /F1 9 Tf 0.15 0.22 0.17 rg 50 65 Td (Demo only | Not submitted to arXiv | 1) Tj ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2747
+%%EOF
