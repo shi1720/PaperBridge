@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getDb, assertAppTenant } from "./runtime";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { handleApi, deleteAccount } from "./api";
@@ -7,8 +7,12 @@ import { DomainError } from "./domain";
 import { withAccountLease } from "./lifecycle";
 import { handleAI, aiEncryptionKey } from "./ai";
 initializeApp();
-export { sendQueuedEmail, retryQueuedEmail } from "./email";
-export const api = onCall(
+export {
+  sendQueuedEmail as paperbridgeSendQueuedEmail,
+  retryQueuedEmail as paperbridgeRetryQueuedEmail,
+} from "./email";
+export { uploadManuscript as paperbridgeUploadManuscript } from "./uploads";
+export const paperbridgeApi = onCall(
   {
     region: "us-central1",
     timeoutSeconds: 540,
@@ -19,14 +23,12 @@ export const api = onCall(
   async (request) => {
     if (!request.auth)
       throw new HttpsError("unauthenticated", "Sign in to continue.");
+    assertAppTenant(request.auth.token);
     const action = request.data?.action;
     if (typeof action !== "string" || action.length > 80)
       throw new HttpsError("invalid-argument", "Specify a valid action.");
     try {
-      if (
-        (await getFirestore().doc(`deletionJobs/${request.auth.uid}`).get())
-          .exists
-      )
+      if ((await getDb().doc(`deletionJobs/${request.auth.uid}`).get()).exists)
         throw new HttpsError(
           "failed-precondition",
           "This account is being deleted or has been deleted.",
@@ -50,6 +52,14 @@ export const api = onCall(
       console.error("Callable failure", {
         action,
         kind: error instanceof Error ? error.name : "unknown",
+        code:
+          typeof (error as { code?: unknown })?.code === "number" ||
+          (typeof (error as { code?: unknown })?.code === "string" &&
+            /^[a-z-]+\/[a-z-]+$/.test(
+              String((error as { code?: unknown }).code),
+            ))
+            ? (error as { code: unknown }).code
+            : undefined,
       });
       throw new HttpsError(
         "internal",
@@ -58,10 +68,10 @@ export const api = onCall(
     }
   },
 );
-export const retryAccountDeletion = onSchedule(
+export const paperbridgeRetryAccountDeletion = onSchedule(
   { schedule: "every 60 minutes", region: "us-central1", timeoutSeconds: 540 },
   async () => {
-    const jobs = await getFirestore()
+    const jobs = await getDb()
       .collection("deletionJobs")
       .where("status", "==", "pending")
       .limit(20)

@@ -1,5 +1,6 @@
 import { aiJobListItem } from "./dto";
-import { getFirestore } from "firebase-admin/firestore";
+import { rateLimit } from "./rate-limit";
+import { getDb } from "./runtime";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError } from "firebase-functions/v2/https";
 import { createHash } from "node:crypto";
@@ -19,8 +20,10 @@ import {
   parseReview,
   provider,
 } from "./ai-core";
-export const aiEncryptionKey = defineSecret("AI_KEY_ENCRYPTION_KEY");
-const db = () => getFirestore();
+export const aiEncryptionKey = defineSecret(
+  "PAPERBRIDGE_AI_KEY_ENCRYPTION_KEY",
+);
+const db = () => getDb();
 const keyRef = (uid: string, p: Provider) =>
   db().collection("aiKeys").doc(`${uid}_${p}`);
 function id(v: unknown) {
@@ -74,6 +77,7 @@ export async function handleAI(
   uid: string,
 ): Promise<any> {
   if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+  await rateLimit(uid, action);
   try {
     if (action === "ai.settings") return settings(uid);
     if (action === "ai.key.save") {

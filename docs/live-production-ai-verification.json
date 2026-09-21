@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-21T08:35:12.052Z",
+  "environment": "Deployed Firebase callable, isolated tenant/named database, real OpenAI API",
+  "model": "gpt-5.4-mini",
+  "stages": [
+    "evidence",
+    "originality",
+    "reviewer",
+    "synthesis"
+  ],
+  "status": "completed",
+  "encryptedStorageVerified": true,
+  "metadataLookup": false,
+  "keyRemoved": true
+}

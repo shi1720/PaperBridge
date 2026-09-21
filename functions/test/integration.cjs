@@ -429,7 +429,7 @@ test("deletion waits for in-flight operations, denies old tokens, and prevents d
     (e) => e.code === "failed-precondition",
   );
 });
-test("Storage rules constrain owner, PDF format and size; authorized viewer URL works", async () => {
+test("Storage rules deny every direct client upload; authorized viewer URL works", async () => {
   const signIn = await fetch(
     `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`,
     {
@@ -464,7 +464,17 @@ test("Storage rules constrain owner, PDF format and size; authorized viewer URL 
   );
   const path = `papers/${author}/${paper.id}/manuscript.pdf`;
   const response = await upload(path, "application/pdf");
-  assert.equal(response.status, 200, await response.text());
+  assert.equal(response.status, 403, await response.text());
+  const { savePrivatePdf } = require("../lib/uploads.js");
+  await savePrivatePdf(
+    getStorage().bucket().file(path),
+    Buffer.from("%PDF-1.4\nTest paper\n%%EOF"),
+  );
+  const deletion = await fetch(`${base}/${encodeURIComponent(path)}`, {
+    method: "DELETE",
+    headers: { Authorization: "Bearer " + idToken },
+  });
+  assert.equal(deletion.status, 403);
   await call(author, "paper.save", {
     paper: { ...paper, storagePath: path, fileName: "manuscript.pdf" },
   });

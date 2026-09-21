@@ -1,6 +1,11 @@
 import { useState, lazy, Suspense } from "react";
-import { sendEmailVerification } from "firebase/auth";
-import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import {
+  NavLink,
+  Route,
+  Routes,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import {
   Compass,
   FileText,
@@ -25,6 +30,7 @@ import { useApp, useData } from "./lib/context";
 import { Avatar, Modal, Empty, Loading } from "./components/ui";
 import { AuthModal, Onboarding } from "./components/Auth";
 import { Discover } from "./components/Discover";
+import { Landing } from "./components/Landing";
 const Papers = lazy(() =>
   import("./components/Papers").then((m) => ({ default: m.Papers })),
 );
@@ -63,6 +69,7 @@ const nav = [
 ] as const;
 export default function App() {
   const {
+      call,
       profile,
       profileError,
       refreshProfile,
@@ -73,21 +80,32 @@ export default function App() {
       toast,
     } = useApp(),
     navigate = useNavigate();
+  const routeLocation = useLocation();
+  const publicHome = routeLocation.pathname === "/" && !profile && !demo;
   const [authOpen, setAuthOpen] = useState(false),
     [mobile, setMobile] = useState(false),
     [legal, setLegal] = useState(false),
     [notices, setNotices] = useState(false);
+  const [returnToAuth, setReturnToAuth] = useState(false);
+  const [authIntent, setAuthIntent] = useState<{
+    role: "researcher" | "endorser";
+    mode: "signup" | "login";
+  }>({ role: "researcher", mode: "signup" });
   const { data: notifications } = useData(
     "notifications.list",
     {},
     !!profile,
     30000,
   );
-  function requireAuth() {
+  function requireAuth(
+    role: "researcher" | "endorser" = "researcher",
+    mode: "signup" | "login" = "signup",
+  ) {
+    setAuthIntent({ role, mode });
     setAuthOpen(true);
   }
   return (
-    <div className="app">
+    <div className={`app ${publicHome ? "public-home" : ""}`}>
       <a href="#main" className="skip-link">
         Skip to content
       </a>
@@ -95,7 +113,7 @@ export default function App() {
         <div className="sidebar-scrim" onClick={() => setMobile(false)} />
       )}
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
-        <NavLink to="/discover" className="brand">
+        <NavLink to="/" className="brand">
           <span className="brand-symbol">
             <BookOpen size={22} />
           </span>
@@ -139,7 +157,7 @@ export default function App() {
             </p>
             <button
               onClick={() =>
-                profile ? navigate("/settings") : setAuthOpen(true)
+                profile ? navigate("/settings") : requireAuth("endorser")
               }
             >
               Become an endorser <ArrowUpRight size={16} />
@@ -178,7 +196,7 @@ export default function App() {
             ) : (
               <button
                 className="button primary full"
-                onClick={() => setAuthOpen(true)}
+                onClick={() => requireAuth()}
               >
                 Join PaperBridge <ArrowRight size={16} />
               </button>
@@ -222,7 +240,7 @@ export default function App() {
               <button
                 className="button compact"
                 onClick={() => {
-                  setAuthOpen(true);
+                  requireAuth("researcher", "login");
                 }}
               >
                 Sign in <ArrowUpRight size={15} />
@@ -250,8 +268,12 @@ export default function App() {
             <button
               onClick={async () => {
                 try {
-                  await sendEmailVerification(user);
-                  toast("Verification email sent. Check your inbox.");
+                  const result = await call("auth.sendVerification");
+                  toast(
+                    result.alreadyVerified
+                      ? "Your email is already verified. Refresh verification to continue."
+                      : "Verification email queued. Check your inbox shortly.",
+                  );
                 } catch (e: any) {
                   toast(e.message);
                 }
@@ -294,7 +316,26 @@ export default function App() {
         <main id="main">
           <Suspense fallback={<Loading />}>
             <Routes>
-              <Route path="/" element={<Discover onAuth={requireAuth} />} />
+              <Route
+                path="/"
+                element={
+                  demo || profile ? (
+                    <Discover onAuth={requireAuth} />
+                  ) : (
+                    <Landing
+                      onJoin={(role) =>
+                        profile
+                          ? navigate(
+                              role === "endorser" ? "/settings" : "/papers",
+                            )
+                          : requireAuth(role)
+                      }
+                      onSignIn={() => requireAuth("researcher", "login")}
+                      onPrivacy={() => setLegal(true)}
+                    />
+                  )
+                }
+              />
               <Route
                 path="/discover"
                 element={<Discover onAuth={requireAuth} />}
@@ -347,10 +388,24 @@ export default function App() {
         </footer>
       </div>
       <Onboarding authOpen={authOpen} />
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        initialRole={authIntent.role}
+        initialMode={authIntent.mode}
+        onReadPolicy={() => {
+          setReturnToAuth(true);
+          setAuthOpen(false);
+          setLegal(true);
+        }}
+      />
       <Modal
         open={legal}
-        onClose={() => setLegal(false)}
+        onClose={() => {
+          setLegal(false);
+          if (returnToAuth) setAuthOpen(true);
+          setReturnToAuth(false);
+        }}
         title="A thoughtful place for research"
         description="PaperBridge community guidelines and privacy"
       >
@@ -382,8 +437,11 @@ export default function App() {
             access the manuscript during an active request. Withdrawal stops new
             access links; existing download links expire within 10 minutes. A
             recipient may have already downloaded a copy. Public posts and
-            opted-in profile details are visible to the community. Private
-            messages are available only to their participants.
+            published profile details are visible to the community. Private
+            messages and shared annotations are available to their participants
+            and authorized service operators. Private notes are not shown to
+            other researchers. Your email address is not published in the
+            directory.
           </p>
           <h3>AI and your data</h3>
           <p>
@@ -398,13 +456,19 @@ export default function App() {
             Export your data, remove API keys, hide your public profile, or
             delete your account in Settings. Operational records may be retained
             for abuse prevention and email delivery diagnostics. The service
-            uses Firebase for identity, database and file storage; transactional
-            email is sent through the configured delivery provider.
+            uses Google Cloud and Firebase for identity, database and file
+            storage; transactional email is sent through the configured delivery
+            provider.
           </p>
-          <p className="fine-print">
-            Last updated September 21, 2026. This is an early release. Support
-            and abuse reports are recorded using the in-app report action.
+          <h3>Report unwanted contact</h3>
+          <p>
+            Use Report on a community post or conversation to flag unwanted
+            contact, impersonation, or inappropriate content for operator
+            review. Use Block in a conversation to prevent new contact. A report
+            does not remove content immediately, and no response time is
+            guaranteed.
           </p>
+          <p className="fine-print">Last updated September 21, 2026.</p>
         </div>
       </Modal>
       <Notifications
@@ -412,7 +476,7 @@ export default function App() {
         onClose={() => setNotices(false)}
         data={notifications || []}
       />
-      {!profile && (
+      {import.meta.env.DEV && !profile && !publicHome && (
         <button
           className="demo-floating"
           onClick={() => {

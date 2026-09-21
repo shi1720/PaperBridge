@@ -1,52 +1,41 @@
-# Deployment handoff
+# Production deployment
 
-## Current facts
+PaperBridge retains [paperbridge.web.app](https://paperbridge.web.app) on Hosting project `paperbridge-research`. Its backend uses the owner's existing billed project `gen-lang-client-0444960702`; a new billing-project quota is unnecessary. Do not deploy the default local configuration wholesale to that shared project.
 
-Created Firebase project: **paperbridge-research** (`417165033706`). Web app registered; native Firestore database created in `nam5`; deny-all client Firestore rules deployed successfully. The labeled interactive preview is deployed at [paperbridge.web.app](https://paperbridge.web.app). Its HTTPS response, security headers, direct route navigation, and rendered PDF have passed a remote browser smoke test.
+## Isolated resources
 
-Billing activation was attempted using the existing open billing account. Google returned `FAILED_PRECONDITION` with `Cloud billing quota exceeded`. No existing project was detached or modified to bypass this limit. `firebase deploy --only functions` independently confirmed the project cannot enable Cloud Build until Blaze is enabled. Auth API initialization and Firestore TTL provisioning are also blocked by billing. SMTP credentials were not supplied.
+- Firestore database `paperbridge`, `us-central1`, deletion protection enabled. Direct client access is denied.
+- Identity Platform tenant `PaperBridge-t4997`, email/password enabled. Every authenticated server entry point rejects other tenants before data access.
+- Private GCS bucket `paperbridge-files-359201230061`, uniform bucket access and public access prevention. Authenticated HTTP upload validates tenant, ownership, size and PDF signature; generation-zero writes prevent replacement. Short-lived signed URLs authorize reading.
+- Runtime identity `paperbridge-runtime@gen-lang-client-0444960702.iam.gserviceaccount.com`: database-scoped Firestore access, tenant-scoped Editor access for account administration, dedicated bucket object access, self-signing and access to its two secrets. Eventarc receiving is granted to this identity, and Cloud Run invocation is limited to its email worker and scheduled handlers.
+- Functions codebase `paperbridge`, with five `paperbridge`-prefixed exports. Existing applications' functions and default databases are outside this deployment. Cloud Functions container artifacts expire after 30 days.
+- Secret Manager: `PAPERBRIDGE_AI_KEY_ENCRYPTION_KEY` and `PAPERBRIDGE_SMTP_PASSWORD`. Preserve the encryption secret across deployments; rotating it requires migrating encrypted BYOK records.
 
-The preview builds with `VITE_SERVICE_READY=false`: the root opens a labeled fictional demo, account signup is gated, and no real manuscript or API key is accepted. Publishing this preview is not a claim that production backend operations are live.
+`firebase.production.json` deploys only the named database and PaperBridge functions. The GCS bucket is governed by private IAM; it does not use the parent project's Firebase Storage bucket. Local `storage.rules` also denies direct client access.
 
-## Unblock and configure
+## Configuration and release
 
-1. Increase the billing account’s project quota through [Google Cloud billing quota support](https://support.google.com/code/contact/billing_quota_increase), then enable [Blaze for this project](https://console.firebase.google.com/project/paperbridge-research/usage/details). Do not unlink other projects without the owner’s explicit instruction.
-2. In Firebase Authentication, enable email/password. Configure an email template and authorized domains for the two Firebase hosting origins. Enable Google sign-in only if the corresponding web OAuth client is correctly configured; set `VITE_GOOGLE_AUTH_ENABLED=true` after verification.
-3. Initialize the default Storage bucket. Use a US region compatible with Functions, or choose the organization’s data-residency requirements before launch. Update `VITE_FIREBASE_STORAGE_BUCKET` with the actual bucket name.
-4. Configure a verified transactional SMTP sender. Put non-secret values from `functions/.env.example` in `functions/.env.paperbridge-research`. Store the SMTP password with `firebase functions:secrets:set SMTP_PASSWORD`; never use an unrelated user’s email credentials. No real inbox delivery has been claimed or tested yet.
-5. Generate a random 32-byte base64 encryption secret directly to Secret Manager as `AI_KEY_ENCRYPTION_KEY`. Do not set the supplied test OpenAI key as a project secret: production AI is per-user BYOK. Preserve the encryption key across deployments; rotation requires migrating encrypted user keys.
-6. Configure Storage CORS using `docs/storage-cors.json`. Grant the Functions runtime service account signing permission on itself (Service Account Token Creator, which includes `iam.serviceAccounts.signBlob`). Grant only the necessary Storage/database permissions. The Firebase CLI will request Firestore cross-service access for Storage rules.
-7. Copy `.env.example` to `.env.local`, fill the public Firebase web config from the registered app, and keep `VITE_SERVICE_READY=false` during staging.
-
-## Verify and release
+Copy `.env.example` into ignored `.env.local` and fill the registered Firebase web app's public config. Backend non-secret configuration belongs in ignored `functions/.env.gen-lang-client-0444960702`, using `functions/.env.example`. Secrets remain in Secret Manager. Firebase deployment archives explicitly exclude all `.env*`, `.secret*`, tests and local credentials.
 
 ```sh
 npm ci
 npm --prefix functions ci
 npm run test:full
-npm run build
-npm --prefix functions run build
-npx firebase deploy --only functions,firestore,storage,hosting --project paperbridge-research
+npm run deploy
 ```
 
-The index file includes a TTL policy for rate-limit records. Verify indexes reach ready state before smoke testing. Enable budgets/alerts, review Functions max instances and quotas, configure App Check before enforcement, and establish a moderation/support owner. Those production controls have not been claimed as configured.
+`deploy` builds both packages, deploys the isolated backend with its explicit project/config, then deploys Hosting to its original project. `npm run deploy:hosting` updates only the website. These commands never deploy shared-project default Firestore rules.
 
-Use two new controlled test accounts, verify their emails through actual inbox links, and test:
+Keep `VITE_SERVICE_READY=false` until production accounts, PDF upload/read permissions and real email inbox delivery pass verification. The public homepage remains available with honest setup status. Production builds exclude fictional demo accounts; `?demo=1` has no effect. Local Vite development retains the labeled fixture for development only. Enable Google sign-in only after separately configuring and testing the tenant provider.
 
-- Researcher and endorser signup/login/recovery; exact category/availability/capacity.
-- Private PDF upload and PDF.js rendering, including CORS/signing; private/shared annotations and cross-account rejection.
-- Request creation produces both real transactional emails; inspect outbox states and actual recipient inboxes. Test retries with a transient failure.
-- Review, comment, changes requested, revised manuscript, willingness to endorse, author-reported completion, decline and withdrawal; old signed URLs expire within ten minutes.
-- Feed, follows, comments, chat, blocks, reports, export and account deletion.
-- BYOK setup with an authorized key, live catalogs, a small review, persisted evidence/source/usage records, and key removal. The provided OpenAI key has already been used only for a bounded live pipeline check. Anthropic/Gemini live tests require their own authorized keys.
-- Production CSP and direct navigation to every route; mobile and keyboard flows.
+## Verification
 
-Only after these pass, rebuild with `VITE_SERVICE_READY=true` and deploy Hosting. Replace preview release notes with the actual production validation date and outcomes. Keep the demo separately accessible through `?demo=1` and clearly labeled.
+Check all indexes and rate-limit/email-budget TTL fields on database `paperbridge`. Test two controlled accounts through real email verification, role setup, private PDF rendering, review requests and inbox delivery. Validate both authorized collaboration and denied cross-account access, revision/revocation, export/deletion and encrypted BYOK settings. Record actual outcomes in `docs/validation.md`; SMTP acceptance alone does not establish inbox delivery.
 
 ## Email operations
 
-`emailOutbox.status` is queued/processing/sent/failed. Sent means the SMTP server accepted the message, not proof of inbox delivery. Automatic retry is bounded; inspect `deliveryIssue` without logging secrets. A failed record can be requeued by a trusted operator after fixing the provider. See `docs/backend.md` for lease/backoff and at-least-once semantics.
+Brevo Free provides the SMTP transport. The app caps attempts at 50/hour, 250/day and 7,000/month, below the provider's daily limit; deferred jobs resume after reset. Credentials and sender verification must finish before delivery is enabled. `emailOutbox.status` is queued/processing/sent/failed. `sent` means SMTP accepted the message. Delivery failures retry at most eight times, then require operator review. See `docs/backend.md` for leases and retry semantics.
 
 ## Rollback
 
-Keep the previous Firebase Hosting version and Functions deployment available. If production verification fails, rebuild/deploy with `VITE_SERVICE_READY=false` to close new account flows while preserving the clearly labeled demo. Do not change security rules to public reads to work around a signing/configuration issue. Do not delete the encryption secret or user data during rollback.
+Redeploy a previous Hosting version or build with `VITE_SERVICE_READY=false` to close account flows while retaining the public homepage. Preserve user data and encryption secrets. Never weaken rules or remove tenant isolation to bypass deployment or signing errors.

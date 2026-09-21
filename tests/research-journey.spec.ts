@@ -4,9 +4,11 @@ const require = createRequire(
   new URL("../functions/package.json", import.meta.url),
 );
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 process.env.GCLOUD_PROJECT = "demo-paperbridge";
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
+const { getFirestore } = require("firebase-admin/firestore");
 if (!getApps().length) initializeApp({ projectId: "demo-paperbridge" });
 function pdf() {
   const content =
@@ -42,7 +44,7 @@ async function register(
 ) {
   await page.goto("/");
   await page
-    .getByRole("button", { name: "Join PaperBridge", exact: true })
+    .getByRole("button", { name: "I’m working on a paper", exact: true })
     .click();
   if (endorser)
     await page.getByRole("button", { name: "I can help endorse" }).click();
@@ -54,7 +56,55 @@ async function register(
     .click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   const u = await getAuth().getUserByEmail(email);
-  await getAuth().updateUser(u.uid, { emailVerified: true });
+  await expect
+    .poll(async () => {
+      const jobs = await getFirestore()
+        .collection("emailOutbox")
+        .where("userId", "==", u.uid)
+        .get();
+      return jobs.docs.filter(
+        (doc: any) => doc.data().kind === "auth-verification",
+      ).length;
+    })
+    .toBe(1);
+  const jobs = await getFirestore()
+    .collection("emailOutbox")
+    .where("userId", "==", u.uid)
+    .get();
+  const verification = jobs.docs
+    .find((doc: any) => doc.data().kind === "auth-verification")!
+    .data();
+  expect(verification.to).toBe(email);
+  expect(verification.subject).toBe("Verify your email for PaperBridge");
+  expect(verification.body).toContain("oobCode=");
+  expect(verification.status).not.toBe("sent");
+  // An immediate resend displays the real cooldown and cannot create duplicate mail.
+  await page.getByRole("button", { name: "Resend email", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText(
+    /wait|minute|try again/i,
+  );
+  expect(
+    (
+      await getFirestore()
+        .collection("emailOutbox")
+        .where("userId", "==", u.uid)
+        .get()
+    ).docs.filter((doc: any) => doc.data().kind === "auth-verification"),
+  ).toHaveLength(1);
+  const link = new URL(verification.body.match(/https?:\/\/[^\s]+/)![0]);
+  const oobCode = link.searchParams.get("oobCode");
+  expect(Boolean(oobCode)).toBe(true);
+  // Consume the generated link through Auth's emulator API, without exposing the code in browser traces.
+  const verified = await fetch(
+    "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:update?key=emulator-key",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ oobCode }),
+    },
+  );
+  expect(verified.status).toBe(200);
+  expect((await getAuth().getUser(u.uid)).emailVerified).toBe(true);
   await page.getByRole("button", { name: "refresh verification" }).click();
   await expect(page.locator(".verify-banner")).not.toBeVisible();
   return u.uid;

@@ -1,25 +1,27 @@
 # Validation record — 2026-09-21
 
-The current release is a labeled preview at [paperbridge.web.app](https://paperbridge.web.app). Production operations remain gated pending billing activation, backend provisioning, and real SMTP inbox validation.
+The redesigned public homepage is deployed at [paperbridge.web.app](https://paperbridge.web.app), with fictional profiles and the demo removed from production. Account registration remains gated while final live service checks are completed. The backend now uses isolated resources in the owner's existing billed GCP project; the original new-project billing quota no longer blocks deployment.
 
 ## Automatic checks
 
-`npm run test:full` passed with Node 22 and Java 21 against the isolated `demo-paperbridge` Firebase emulators, with Auth, Functions, Firestore and Storage running together:
+Current regression passed with Node 22 and Java 21:
 
-- 5 frontend AI rendering/contract tests.
-- 19 backend unit tests for domain rules, encryption, provider adapters, grounding, consent and input boundaries.
-- 30 backend integration tests for access control, request transitions/capacity, email queue retries, private data projections, revision history, immutable PDF objects, deletion and AI job isolation/idempotency.
-- 6 Playwright browser checks: two-account registration and verification, private PDF rendering/notes/revisions, endorsement conversation and withdrawal/revoked reviewer access, fictional community journeys, follow persistence/consent reset, mobile overflow, and accessibility.
+- 9 frontend tests, including actual Firebase deployment archive exclusion for both configs.
+- 29 backend unit tests covering domain rules, cryptography, provider adapters, grounding, consent, email budgets and upload boundaries.
+- 45 Auth/Firestore/Storage/Functions emulator integration tests, including tenant isolation, immutable authenticated HTTP uploads, direct-access denial, email retry limits and branded verification links.
+- 11 browser checks across the full suite and focused runs. Both account roles receive a private branded verification outbox item, resend cooldown prevents duplicates, and the actual generated verification code is consumed through the Auth emulator before the real PDF/revision/request workflow. Public-home, signup-policy entry, mobile layout and production demo-query rejection also pass.
 
-The accessibility checks cover 11 loaded routes at 1440px and 390px with zero serious/critical axe findings. This is automated evidence, not a claim of complete accessibility conformance. TypeScript and production build pass. Both production dependency audits report zero known vulnerabilities.
+TypeScript and production builds pass. Both production dependency audits report zero known vulnerabilities. Automated accessibility checks found zero serious/critical axe findings across the reviewed desktop/mobile routes; this is not a claim of complete accessibility conformance.
+
+The homepage underwent two independent critique passes and a substantial product-focused redesign. Its manuscript/annotation and AI-output illustrations are labeled and noninteractive, with no fictional members or invented testimonials. Layout checks passed at 320, 390, 768, 1024 and 1440 pixels. The deployed homepage passed remote HTTPS/security-header, direct-route and mobile-overflow checks, with zero observed runtime errors. Production query parameters cannot enable fictional content, and the fixture PDF is excluded from Hosting uploads.
 
 ## Live checks and limits
 
-The hosted preview passes an HTTPS browser smoke for security headers, visible preview labeling, direct route navigation, actual PDF rendering, and no observed runtime errors.
+Named production Firestore rules, all 20 indexes, both TTL policies and all five backend functions are deployed. Two isolated tenant test accounts received real Firebase verification emails and successfully redeemed their codes. Live database reads, rate-limit writes and operation leases work. The live Auth permission issue was resolved by the documented tenant-scoped Editor role. Both profiles now round-trip correctly. A real PDF uploaded through the authenticated HTTP endpoint, saved to the named database, loaded through a signed URL with production CORS, and was denied to the other account. The live request flow, two notification queues, review state, private/shared annotations, conversation, export and withdrawal revocation also passed. Both scheduled handlers ran successfully. The named-database email event trigger processed a real branded verification job and deferred it accurately while SMTP was disabled.
 
-An authorized live OpenAI pipeline passed all four stages with grounded quotations. A separate live browser-to-callable exercise passed BYOK entry, encrypted storage, dynamic model selection, saved configuration, explicit consent, and four persisted stages without provider errors. The final full live UI smoke also passed result tabs, grounded quotations, empty-finding cautions, provider-resolved model/usage, metadata audit, consent reset, and key removal. Rejected attribution findings and other validation limits are retained in the credential-free live verification record. See [AI verification](ai.md) for precise outcomes and the opt-in reproduction script. No Anthropic or Gemini live credentials were supplied. Paid tests are excluded from CI.
+An authorized live OpenAI pipeline passed all four stages with grounded quotations. A separate live browser-to-callable exercise passed BYOK entry, encrypted storage, dynamic model selection, saved configuration, explicit consent, and four persisted stages without provider errors. The final full live UI smoke also passed result tabs, grounded quotations, empty-finding cautions, provider-resolved model/usage, metadata audit, consent reset, and key removal. Rejected attribution findings and other validation limits are retained in the credential-free live verification record. See [AI verification](ai.md) for precise outcomes and the opt-in reproduction script. A further deployed-cloud OpenAI check passed key validation, encrypted storage, decryption, model discovery, saved configuration and all four review stages; the test key was then removed. See [production AI verification](live-production-ai-verification.json). No Anthropic or Gemini live credentials were supplied. Paid tests are excluded from CI.
 
-Email transport is tested with a mocked SMTP transport and real Firestore transactions; actual inbox delivery is untested. Real production Auth, Storage signing/CORS, Functions and TTL provisioning cannot be verified until the billing quota is resolved. Scheduled retry handlers require production scheduler verification. User research was simulated by review agents, not conducted with recruited participants; see [product review](product-review.md).
+Brevo Free signup and account validation are complete. SMTP credential creation awaits the browser-required approval; transport remains explicitly disabled during staging. The sender identity is verified. Request/review SMTP acceptance and final inbox delivery remain unverified until a real SMTP key is configured. User research was simulated by review agents, not conducted with recruited participants; see [product review](product-review.md).
 
 ## Release decision
 

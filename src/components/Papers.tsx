@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ref, uploadBytesResumable } from "firebase/storage";
 import {
   Plus,
   Upload,
@@ -13,7 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useApp, useData } from "../lib/context";
-import { storage } from "../lib/firebase";
+import { uploadManuscript } from "../lib/firebase";
 import { CATEGORIES } from "../lib/categories";
 import { PageHeading, Empty, Loading, ErrorBox, Modal, Tag } from "./ui";
 import { date } from "../lib/types";
@@ -78,7 +77,7 @@ export function Papers({ onAuth }: { onAuth: () => void }) {
                   <Tag>{p.category}</Tag>
                   <span className="privacy-label">
                     <Lock size={12} />
-                    Private
+                    {p.visibility === "public" ? "Public" : "Private"}
                   </span>
                 </div>
                 <h3>{p.title}</h3>
@@ -118,7 +117,7 @@ function UploadModal({
   onClose: () => void;
   existing?: any;
 }) {
-  const { profile, user, demo, call, refresh, toast } = useApp();
+  const { profile, demo, call, refresh, toast } = useApp();
   const navigate = useNavigate();
   const uploadDraft = useRef<{
     id: string;
@@ -168,21 +167,10 @@ function UploadModal({
         setProgress("Reading your PDF…");
         text = await extractPdfText(file);
         if (!demo) {
-          storagePath = `papers/${user!.uid}/${id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-          await new Promise<void>((resolve, reject) => {
-            const task = uploadBytesResumable(ref(storage, storagePath), file, {
-              contentType: "application/pdf",
-            });
-            task.on(
-              "state_changed",
-              (s) =>
-                setProgress(
-                  `Uploading ${Math.round((s.bytesTransferred / s.totalBytes) * 100)}%`,
-                ),
-              reject,
-              () => resolve(),
-            );
-          });
+          const uploaded = await uploadManuscript(file, id, (percent) =>
+            setProgress(`Uploading ${percent}%`),
+          );
+          storagePath = uploaded.storagePath;
         }
       }
       uploadDraft.current = { id, file, text, storagePath };

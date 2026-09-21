@@ -1,0 +1,23 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "paperbridge",
+      "runtime": "nodejs22",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*-debug.log",
+        "src/**/*.test.ts",
+        ".secret*",
+        ".env*",
+        "test"
+      ]
+    }
+  ],
+  "firestore": {
+    "database": "paperbridge",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

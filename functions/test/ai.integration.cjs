@@ -3,7 +3,9 @@ const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
-process.env.AI_KEY_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
+process.env.PAPERBRIDGE_AI_KEY_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString(
+  "base64",
+);
 if (!process.env.FIRESTORE_EMULATOR_HOST)
   throw new Error("Refusing integration tests without FIRESTORE_EMULATOR_HOST");
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || "demo-paperbridge" });
@@ -209,5 +211,50 @@ test("provider failures retain partial audits and release concurrency lease", as
     );
   } finally {
     global.fetch = normal;
+  }
+});
+test("AI credential/catalog requests cannot bypass the shared per-minute provider rate guard", async () => {
+  const account = "ai-rate-" + require("node:crypto").randomUUID();
+  const clock = Date.now,
+    now = clock();
+  Date.now = () => now;
+  try {
+    for (let i = 0; i < 20; i++)
+      await handleAI(
+        "ai.key.save",
+        { provider: "openai", key: "test-api-key-at-least-20-chars" },
+        account,
+      );
+    let requests = 0;
+    const prior = global.fetch;
+    global.fetch = async (...args) => {
+      requests++;
+      return prior(...args);
+    };
+    try {
+      await assert.rejects(
+        handleAI(
+          "ai.key.save",
+          { provider: "openai", key: "test-api-key-at-least-20-chars" },
+          account,
+        ),
+        (e) => e.code === "resource-exhausted",
+      );
+      assert.equal(
+        requests,
+        0,
+        "over-limit requests must stop before outbound provider calls",
+      );
+    } finally {
+      global.fetch = prior;
+    }
+  } finally {
+    Date.now = clock;
+    await db.doc("aiKeys/" + account + "_openai").delete();
+    const hash = require("node:crypto")
+      .createHash("sha256")
+      .update(`${account}:ai.key.save:${Math.floor(now / 60000)}`)
+      .digest("hex");
+    await db.doc("rateLimits/" + hash).delete();
   }
 });

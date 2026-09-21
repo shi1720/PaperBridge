@@ -4,7 +4,8 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "demo-manuscript.pdf"
     ],
     "rewrites": [
       {
@@ -68,7 +69,10 @@
         "node_modules",
         ".git",
         "*-debug.log",
-        "src/**/*.test.ts"
+        "src/**/*.test.ts",
+        ".secret*",
+        ".env*",
+        "test"
       ]
     }
   ],

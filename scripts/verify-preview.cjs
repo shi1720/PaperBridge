@@ -1,4 +1,4 @@
-const { chromium } = require("@playwright/test");
+const { chromium, expect } = require("@playwright/test");
 (async () => {
   const origin = process.env.PREVIEW_URL || "https://paperbridge.web.app";
   const response = await fetch(origin);
@@ -18,36 +18,75 @@ const { chromium } = require("@playwright/test");
     const failures = [];
     page.on("pageerror", (e) => failures.push(e.message));
     await page.goto(origin);
-    await page.getByText("INTERACTIVE DEMO", { exact: true }).waitFor();
-    await page
-      .getByRole("button", { name: "Maya Chen", exact: true })
-      .waitFor();
-    await page.goto(origin + "/papers/demo-paper");
-    await page
-      .locator(".pb-text-layer")
-      .getByText("FICTIONAL DEMONSTRATION MANUSCRIPT", { exact: false })
-      .waitFor();
+    await expect(page.locator(".landing h1")).toContainText(
+      "Build a stronger paper.",
+    );
+    await expect(
+      page.getByRole("button", { name: "I’m working on a paper", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Join as an endorser", exact: true }),
+    ).toBeVisible();
     await page.screenshot({
-      path: "/tmp/paperbridge-hosted-reader.png",
+      path: "/tmp/paperbridge-hosted-home.png",
       fullPage: true,
     });
-    await page.goto(origin + "/review");
-    await page
-      .getByRole("heading", { name: "Think deeper. Revise with purpose." })
-      .waitFor();
-    await page.goto(origin + "/settings?tab=ai");
-    await page
-      .getByText("Bring your own intelligence", { exact: true })
-      .waitFor();
+    for (const route of [
+      "/?demo=1",
+      "/discover?demo=1",
+      "/community?demo=1",
+      "/papers/demo-paper?demo=1",
+    ]) {
+      await page.goto(origin + route);
+      await expect(page.locator("main")).toBeVisible();
+      await expect(
+        page.getByText("INTERACTIVE DEMO", { exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByText(/Maya Chen|Alex Morgan|Oliver Reed|fictional/i),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: /explore.*demo/i }),
+      ).toHaveCount(0);
+      await expect(page.locator(".person-card,.social-post")).toHaveCount(0);
+    }
+    await page.goto(origin + "/discover");
+    await expect(
+      page.getByRole("heading", {
+        name: "Find a connection in your field",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.goto(origin + "/community");
+    await expect(
+      page.getByRole("heading", {
+        name: "Find your research community",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(origin);
+    await expect(page.locator(".landing h1")).toBeVisible();
+    if (
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      )
+    )
+      throw Error("Mobile homepage overflows");
+    await page.screenshot({
+      path: "/tmp/paperbridge-hosted-home-mobile.png",
+      fullPage: true,
+    });
     if (failures.length) throw Error(failures.join("; "));
     console.log(
       JSON.stringify({
         url: origin,
         status: response.status,
         securityHeaders: true,
-        labeledPreview: true,
-        pdfRendered: true,
-        deepLinks: true,
+        publicHomepage: true,
+        fictionalProductionData: false,
+        signedOutStates: true,
+        mobileOverflow: false,
         runtimeErrors: 0,
       }),
     );

@@ -99,7 +99,9 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
             <button
               className="button primary"
               onClick={() =>
-                document.getElementById("directory-search")?.focus()
+                profile
+                  ? document.getElementById("directory-search")?.focus()
+                  : onAuth()
               }
             >
               Find your connection <ArrowRight size={17} />
@@ -149,7 +151,13 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
             <span className="count-pill">
               {demo
                 ? "Demo community"
-                : `${people.length} ${people.length === 1 ? "researcher" : "researchers"}`}
+                : !profile
+                  ? "Member directory"
+                  : loading
+                    ? "Loading profiles…"
+                    : error
+                      ? "Directory unavailable"
+                      : `${people.length} ${people.length === 1 ? "researcher" : "researchers"}`}
             </span>
           </div>
           <div className="search-line">
@@ -160,6 +168,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
                 aria-label="Search researchers"
                 placeholder="Search by name, institution, or research interest"
                 value={search}
+                disabled={!profile}
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search && (
@@ -173,6 +182,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
               <select
                 aria-label="Choose discipline"
                 value={category}
+                disabled={!profile}
                 onChange={(e) => setCategory(e.target.value)}
               >
                 <option value="">All categories</option>
@@ -189,6 +199,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
               <button
                 key={id}
                 className={category === id ? "active" : ""}
+                disabled={!profile}
                 onClick={() => setCategory(id)}
               >
                 {name}
@@ -205,13 +216,28 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
               <input
                 type="checkbox"
                 checked={available}
+                disabled={!profile}
                 onChange={(e) => setAvailable(e.target.checked)}
               />
               <span className="switch" />
               Accepting requests
             </label>
           </div>
-          {loading ? (
+          {!profile ? (
+            <Empty
+              title="Find a connection in your field"
+              action={
+                <button className="button primary" onClick={onAuth}>
+                  Create an account or sign in <ArrowRight size={16} />
+                </button>
+              }
+            >
+              This directory contains profiles published by participating
+              researchers. Sign in to browse their categories and availability,
+              or create your profile to participate. No institutional
+              affiliation is required.
+            </Empty>
+          ) : loading ? (
             <Loading />
           ) : error ? (
             <ErrorBox message={error} />
@@ -287,7 +313,9 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
               title={
                 search || category
                   ? "No matching researchers yet"
-                  : "Be part of the first connections"
+                  : available
+                    ? "No researchers accepting requests yet"
+                    : "No endorser profiles listed yet"
               }
               action={
                 <div className="empty-actions">
@@ -295,7 +323,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
                     className="button primary"
                     onClick={() => (profile ? navigate("/settings") : onAuth())}
                   >
-                    Create your researcher profile <Plus size={16} />
+                    Update your researcher profile <Plus size={16} />
                   </button>
                   {(search || category) && (
                     <button
@@ -314,7 +342,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
             >
               {search || category
                 ? "Try another category or include researchers who have paused requests."
-                : "This is a new community. Set up your profile, add your research interests, and help make independent research more connected."}
+                : "Profiles will appear here when members publish them. You can prepare your manuscript now or update your own research interests and availability."}
             </Empty>
           )}
           <div className="directory-note">

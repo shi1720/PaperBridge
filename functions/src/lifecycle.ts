@@ -1,4 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
+import { getDb } from "./runtime";
 import { HttpsError } from "firebase-functions/v2/https";
 /** A deletion tombstone and a lease are read/written in the same transaction.
  * Deletion cannot purge until every earlier operation finishes (or its function timeout expires).
@@ -8,7 +8,7 @@ export async function withAccountLease<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
   if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
-  const db = getFirestore();
+  const db = getDb();
   const ref = db.collection("operationLeases").doc();
   await db.runTransaction(async (tx) => {
     const tombstone = await tx.get(db.doc(`deletionJobs/${uid}`));

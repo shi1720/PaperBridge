@@ -1,19 +1,8 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /papers/{userId}/{paperId}/{fileName} {
-      // Readers receive a short-lived signed URL after server-side manuscript access checks.
-      allow read: if false;
-      allow create: if resource == null
-        && request.auth != null
-        && request.auth.uid == userId
-        && !firestore.exists(/databases/(default)/documents/deletionJobs/$(userId))
-        && request.resource.size < 25 * 1024 * 1024
-        && request.resource.contentType == 'application/pdf'
-        && fileName.matches('.*[.]pdf')
-        && !request.resource.metadata.keys().hasAny(['firebaseStorageDownloadTokens']);
-      allow delete: if request.auth != null && request.auth.uid == userId;
-    }
+    // All uploads go through the tenant-aware HTTP endpoint. Readers receive
+    // short-lived server-signed URLs after manuscript authorization.
     match /{allPaths=**} { allow read, write: if false; }
   }
 }

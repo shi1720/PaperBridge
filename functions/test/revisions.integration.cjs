@@ -303,7 +303,7 @@ test("revision history is capped at the latest twenty metadata entries", async (
     (e) => e.code === "not-found",
   );
 });
-test("Storage rules prevent a client from overwriting a previous revision object", async () => {
+test("Storage rules prevent a client from overwriting or deleting a previous revision object", async () => {
   const response = await fetch(
     `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`,
     {
@@ -330,4 +330,10 @@ test("Storage rules prevent a client from overwriting a previous revision object
     },
   );
   assert.equal(upload.status, 403);
+  const deletion = await fetch(
+    `http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}/v0/b/${projectId}.appspot.com/o/${encodeURIComponent(path1)}`,
+    { method: "DELETE", headers: { Authorization: "Bearer " + idToken } },
+  );
+  assert.equal(deletion.status, 403);
+  assert.equal((await getStorage().bucket().file(path1).exists())[0], true);
 });

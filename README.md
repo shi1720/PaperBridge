@@ -4,11 +4,9 @@ A private-first research collaboration workspace for independent researchers and
 
 ## Release status
 
-**The code and local Firebase emulator journeys are implemented. The hosted release is an explicitly labeled interactive preview, not an operational production service.**
+The production homepage explains private manuscript review and endorsement connections, with separate researcher and endorser entry points. Fictional profiles and the interactive fixture are excluded from production; local development retains a labeled demo.
 
-Preview: **[paperbridge.web.app](https://paperbridge.web.app)**. The Firebase project is `paperbridge-research`. Google Cloud rejected billing activation with `Cloud billing quota exceeded`; Functions, Storage, production Auth initialization, and the Firestore TTL setting therefore cannot finish provisioning. A transactional SMTP account also has not been provided. Real inbox delivery must be tested before launch. Account creation is disabled in the hosted preview.
-
-This distinction is intentional: fictional demo members never appear as real members, demo messages never contact anyone, and simulated AI results are never presented as live reviews.
+[paperbridge.web.app](https://paperbridge.web.app) retains its original Hosting project. The backend is isolated in the owner's existing billed project, with a dedicated database, Auth tenant, bucket and runtime identity. Production account entry remains gated until real SMTP delivery and cloud smoke checks pass. See the [validation record](docs/validation.md) for verified outcomes.
 
 ## What is implemented
 
@@ -43,7 +41,7 @@ node scripts/prepare-emulator.cjs
 npx firebase emulators:start --only auth,firestore,storage,functions --project demo-paperbridge
 ```
 
-Start Vite in another terminal with `VITE_USE_EMULATORS=true`, `VITE_FIREBASE_PROJECT_ID=demo-paperbridge`, `VITE_FIREBASE_STORAGE_BUCKET=demo-paperbridge.appspot.com`, and `VITE_FIREBASE_API_KEY=emulator-key`. Emulated verification emails are visible in the emulator output/UI. The tests verify email addresses through the Auth emulator only; there is no production verification bypass.
+Start Vite in another terminal with `VITE_FIREBASE_AUTH_TENANT_ID=` (empty), `VITE_USE_EMULATORS=true`, `VITE_FIREBASE_PROJECT_ID=demo-paperbridge`, `VITE_FIREBASE_STORAGE_BUCKET=demo-paperbridge.appspot.com`, and `VITE_FIREBASE_API_KEY=emulator-key`. Emulated verification emails are visible in the emulator output/UI. The tests verify email addresses through the Auth emulator only; there is no production verification bypass.
 
 ## Verification
 
@@ -61,8 +59,8 @@ The browser suite covers genuine two-account sign-up, verified role setup, PDF u
 
 Follow [deployment.md](docs/deployment.md). Keep provider keys out of `.env` files and browser bundles. Firebase web config is public application configuration; server encryption and SMTP secrets belong in Secret Manager.
 
-- `npm run deploy:preview` publishes the labeled demo while `VITE_SERVICE_READY` is false.
-- `npm run deploy` deploys the full configured Firebase service after prerequisites are met.
+- `npm run deploy:hosting` publishes the public homepage and client without modifying backend resources.
+- `npm run deploy` deploys the isolated backend and then the original Hosting site, each with an explicit project.
 - Enable `VITE_SERVICE_READY=true` only after production Auth, Functions, Storage authorization, PDF signing/CORS, and real transactional email delivery are verified.
 - Enable `VITE_GOOGLE_AUTH_ENABLED=true` only after the Google provider and OAuth domains are configured and tested.
 
@@ -74,4 +72,4 @@ The callable API is the only client entrypoint to Firestore. Direct client datab
 
 Current deliberate limits: no paid subscription checkout; moderation reports require an operator; histories return bounded newest records without older-message pagination; no OCR/full-text plagiarism corpus; AI is a bounded synchronous four-stage pipeline with saved partial results rather than a durable background queue. Production billing alerts, App Check enforcement, monitoring and a staffed support process are operator setup work. These are not represented as completed.
 
-The repository is private. Demo identities, affiliations, paper text, counts, and conversations are fictional.
+The repository is private. Development fixtures are fictional and are not production member records.

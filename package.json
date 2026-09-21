@@ -9,11 +9,11 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "deploy": "npm run build && npm --prefix functions run build && firebase deploy",
+    "deploy": "npm run build && npm --prefix functions run build && firebase deploy --config firebase.production.json --project gen-lang-client-0444960702 --only functions,firestore && firebase deploy --project paperbridge-research --only hosting",
     "check": "npm run test && npm --prefix functions test && npm run build",
     "test:full": "npm run check && node scripts/prepare-emulator.cjs && firebase emulators:exec --only auth,firestore,storage,functions --project demo-paperbridge \"node scripts/emulator-check.cjs\"",
     "format": "prettier --write src functions/src tests scripts docs README.md",
-    "deploy:preview": "npm run build && firebase deploy --only hosting,firestore:rules"
+    "deploy:hosting": "npm run build && firebase deploy --project paperbridge-research --only hosting"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { auth, serverCall, serviceReady } from "./firebase";
+import { auth, serverCall } from "./firebase";
 import { demoCall, demoProfile } from "./demo";
 import type { Profile } from "./types";
 type Context = {
@@ -25,12 +25,13 @@ type Context = {
   refresh: () => void;
 };
 const AppContext = createContext<Context>(null!);
+// Fictional fixtures are strictly a local development/testing capability.
+const demoAllowed = import.meta.env.DEV;
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null),
     [profile, setProfile] = useState<Profile | null>(null),
     [demo, setDemo] = useState(
-      new URLSearchParams(location.search).get("demo") === "1" ||
-        (!serviceReady && import.meta.env.PROD),
+      demoAllowed && new URLSearchParams(location.search).get("demo") === "1",
     ),
     [loading, setLoading] = useState(true),
     [profileError, setProfileError] = useState(""),
@@ -67,7 +68,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [notice]);
   async function refreshProfile() {
-    if (demo) {
+    if (demoAllowed && demo) {
       setProfile({ ...demoProfile });
       return;
     }
@@ -88,13 +89,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   const value: Context = {
     user,
-    profile: demo ? demoProfile : profile,
-    demo,
+    profile: demoAllowed && demo ? demoProfile : profile,
+    demo: demoAllowed && demo,
     loading,
     profileError,
-    call: demo ? demoCall : serverCall,
+    call: demoAllowed && demo ? demoCall : serverCall,
     refreshProfile,
     startDemo: () => {
+      if (!demoAllowed) return;
       setDemo(true);
       setRevision((n) => n + 1);
     },

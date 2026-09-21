@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   createUserWithEmailAndPassword,
-  sendEmailVerification,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
@@ -14,11 +13,17 @@ import { GraduationCap, Microscope, ArrowRight } from "lucide-react";
 export function AuthModal({
   open,
   onClose,
+  initialRole = "researcher",
+  initialMode = "signup",
+  onReadPolicy,
 }: {
   open: boolean;
   onClose: () => void;
+  initialRole?: "researcher" | "endorser";
+  initialMode?: "signup" | "login";
+  onReadPolicy: () => void;
 }) {
-  const { call, refreshProfile, toast, startDemo } = useApp();
+  const { call, refreshProfile, toast } = useApp();
   const [mode, setMode] = useState<"signup" | "login" | "reset">("signup"),
     [role, setRole] = useState("researcher"),
     [name, setName] = useState(""),
@@ -26,6 +31,13 @@ export function AuthModal({
     [password, setPassword] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  useEffect(() => {
+    if (open) {
+      setMode(initialMode);
+      setRole(initialRole);
+      setError("");
+    }
+  }, [open, initialRole, initialMode]);
   async function finish() {
     await refreshProfile();
     onClose();
@@ -43,7 +55,7 @@ export function AuthModal({
         await signInWithEmailAndPassword(auth, email, password);
         await finish();
       } else {
-        const r = await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, email, password);
         await call("profile.save", {
           profile: {
             name,
@@ -59,8 +71,10 @@ export function AuthModal({
             orcid: "",
           },
         });
-        await sendEmailVerification(r.user);
-        toast("Account created. Check your email to verify your address.");
+        await call("auth.sendVerification");
+        toast(
+          "Account created. Verification email queued; check your inbox shortly.",
+        );
         await finish();
       }
     } catch (e: any) {
@@ -99,21 +113,16 @@ export function AuthModal({
       <Modal
         open={open}
         onClose={onClose}
-        title="A first look at PaperBridge"
-        description="Explore the complete experience in our interactive preview."
+        title="Account registration is not open yet"
+        description="PaperBridge is preparing to welcome researchers and endorsers."
       >
         <p className="notice">
-          Account registration is not open yet. The preview uses fictional
-          researchers and keeps changes in this browser session.
+          Account services are not available yet. You can read about the
+          research workflow and privacy controls while we finish setup. No
+          account has been created and no manuscript has been collected.
         </p>
-        <button
-          className="button primary"
-          onClick={() => {
-            startDemo();
-            onClose();
-          }}
-        >
-          Explore the demo <ArrowRight size={16} />
+        <button className="button primary" onClick={onClose}>
+          Back to PaperBridge <ArrowRight size={16} />
         </button>
       </Modal>
     );
@@ -232,9 +241,18 @@ export function AuthModal({
         </button>
       )}
       <p className="fine-print">
-        By continuing, you agree to the community guidelines and privacy terms
-        available in the sidebar. PaperBridge is independent of arXiv.
+        By creating an account, you agree to follow the community guidelines.
+        Review how your profile and research data are handled before joining.
       </p>
+      <button
+        type="button"
+        className="text-link"
+        disabled={busy}
+        onClick={onReadPolicy}
+      >
+        Read guidelines & privacy <ArrowRight size={15} />
+      </button>
+      <p className="fine-print">PaperBridge is independent of arXiv.</p>
     </Modal>
   );
 }

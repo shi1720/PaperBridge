@@ -1,20 +1,20 @@
+import { getDb, getAppAuth, getPaperBucket, assertAppTenant } from "./runtime";
 import { paperListItem } from "./dto";
 import {
-  getFirestore,
   FieldValue,
   DocumentReference,
   Transaction,
   WriteBatch,
   Query,
 } from "firebase-admin/firestore";
-import { getStorage } from "firebase-admin/storage";
-import { getAuth } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
 import { createHash, randomUUID } from "node:crypto";
 import * as D from "./domain";
 import { withAccountLease } from "./lifecycle";
+import { rateLimit } from "./rate-limit";
+import { queueVerificationEmail } from "./verification";
 
-const db = () => getFirestore();
+const db = () => getDb();
 const doc = (collection: string, id: string) =>
   db().collection(collection).doc(id);
 const data = (s: any) => (s.exists ? { ...s.data(), id: s.id } : null);
@@ -121,7 +121,7 @@ function versionHistory(paper: any): any[] {
 }
 async function manuscriptDownloadUrl(storagePath: string): Promise<string> {
   if (!storagePath) return "";
-  const file = getStorage().bucket().file(storagePath);
+  const file = getPaperBucket().file(storagePath);
   const [exists] = await file.exists();
   if (!exists) return "";
   if (
@@ -132,7 +132,7 @@ async function manuscriptDownloadUrl(storagePath: string): Promise<string> {
     await file.setMetadata({
       metadata: { firebaseStorageDownloadTokens: token },
     });
-    return `http://${(process.env.FIREBASE_STORAGE_EMULATOR_HOST || process.env.STORAGE_EMULATOR_HOST || "").replace(/^https?:\/\//, "")}/v0/b/${getStorage().bucket().name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+    return `http://${(process.env.FIREBASE_STORAGE_EMULATOR_HOST || process.env.STORAGE_EMULATOR_HOST || "").replace(/^https?:\/\//, "")}/v0/b/${getPaperBucket().name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
   }
   const [url] = await file.getSignedUrl({
     action: "read",
@@ -173,35 +173,6 @@ async function notification(
 }
 function siteUrl(): string {
   return process.env.APP_URL || "https://paperbridge.web.app";
-}
-async function rateLimit(uid: string, action: string): Promise<void> {
-  const read =
-    action.endsWith(".list") ||
-    action.endsWith(".get") ||
-    action.endsWith(".messages") ||
-    action.endsWith(".comments") ||
-    action === "ai.models" ||
-    action === "ai.settings.get";
-  const max =
-    action === "request.create"
-      ? 12
-      : action.startsWith("ai.")
-        ? 20
-        : read
-          ? 180
-          : 50;
-  const key = hash(`${uid}:${action}:${Math.floor(Date.now() / 60_000)}`);
-  await db().runTransaction(async (tx) => {
-    const ref = doc("rateLimits", key);
-    const s = await tx.get(ref);
-    const count = s.data()?.count || 0;
-    if (count >= max)
-      fail("resource-exhausted", "Please wait a minute before trying again.");
-    tx.set(ref, {
-      count: count + 1,
-      expiresAt: new Date(Date.now() + 3_600_000),
-    });
-  });
 }
 async function deleteQuery(query: Query): Promise<void> {
   for (;;) {
@@ -247,9 +218,10 @@ async function removePaper(id: string, uid: string): Promise<void> {
   const posts = await db().collection("posts").where("paperId", "==", id).get();
   for (const post of posts.docs)
     await post.ref.update({ paperId: null, paperTitle: null });
-  await getStorage()
-    .bucket()
-    .deleteFiles({ prefix: `papers/${uid}/${id}/`, force: true });
+  await getPaperBucket().deleteFiles({
+    prefix: `papers/${uid}/${id}/`,
+    force: true,
+  });
   await doc("papers", id).delete();
 }
 async function transitionRequest(
@@ -341,6 +313,7 @@ export async function handleApi(
   uid: string,
   authToken: any = {},
 ): Promise<any> {
+  assertAppTenant(authToken);
   return action === "account.delete"
     ? dispatchApi(action, input, uid, authToken)
     : withAccountLease(uid, () => dispatchApi(action, input, uid, authToken));
@@ -375,10 +348,12 @@ async function dispatchApi(
       "Verify your email address before participating.",
     );
   switch (action) {
+    case "auth.sendVerification":
+      return queueVerificationEmail(uid);
     case "profile.save": {
       const p = D.profileInput(input.profile);
       const now = Date.now();
-      const user = await getAuth().getUser(uid);
+      const user = await getAppAuth().getUser(uid);
       return db().runTransaction(async (tx) => {
         const [existing, tombstone] = await Promise.all([
           tx.get(doc("profiles", uid)),
@@ -1340,8 +1315,8 @@ async function exportAccount(uid: string): Promise<any> {
 }
 export async function deleteAccount(uid: string): Promise<boolean> {
   try {
-    await getAuth().updateUser(uid, { disabled: true });
-    await getAuth().revokeRefreshTokens(uid);
+    await getAppAuth().updateUser(uid, { disabled: true });
+    await getAppAuth().revokeRefreshTokens(uid);
   } catch (error: any) {
     if (error.code !== "auth/user-not-found") throw error;
   }
@@ -1449,9 +1424,7 @@ export async function deleteAccount(uid: string): Promise<boolean> {
   for (const [collection, fields] of Object.entries(purge))
     for (const field of fields)
       await deleteQuery(db().collection(collection).where(field, "==", uid));
-  await getStorage()
-    .bucket()
-    .deleteFiles({ prefix: `papers/${uid}/`, force: true });
+  await getPaperBucket().deleteFiles({ prefix: `papers/${uid}/`, force: true });
   for (const collection of [
     "profiles",
     "users",
@@ -1459,10 +1432,11 @@ export async function deleteAccount(uid: string): Promise<boolean> {
     "aiCredentials",
     "aiUsage",
     "reviewerQuotas",
+    "authEmailLimits",
   ])
     await db().recursiveDelete(doc(collection, uid));
   try {
-    await getAuth().deleteUser(uid);
+    await getAppAuth().deleteUser(uid);
   } catch (error: any) {
     if (error.code !== "auth/user-not-found") throw error;
   }

@@ -1,6 +1,6 @@
 # Backend operation and verification
 
-The callable `api` in `us-central1` is the only Firestore application entrypoint. Firebase Authentication is required for all actions. Participation (requests, status changes, discussions, likes, following, chat and reports) additionally requires a verified email. Direct Firestore access is denied. User emails, endorsement URLs, messages, manuscript text, notes and AI credentials are not exposed in the directory or feed.
+The callable `paperbridgeApi` in `us-central1` is the only Firestore application entrypoint. Firebase Authentication is required for all actions. Participation (requests, status changes, discussions, likes, following, chat and reports) additionally requires a verified email. Direct Firestore access is denied. User emails, endorsement URLs, messages, manuscript text, notes and AI credentials are not exposed in the directory or feed.
 
 `functions/src/api.ts` implements the contract in `docs/contract.md`. All timestamps are milliseconds. Returned documents include `id`. A missing own profile returns `null` for onboarding; another missing profile remains a `not-found` error. Categories are validated against the same 155 canonical IDs offered by the UI. New APIs beyond the original contract: `block.list` returns the caller's block records. `notifications.list` includes `emailStatus` and `emailIssue` when an email was queued; it never includes the recipient address. `account.delete` returns `{deleted,pending}`; if an operation was already running, pending deletion is completed automatically after it ends.
 
@@ -11,16 +11,16 @@ The callable `api` in `us-central1` is the only Firestore application entrypoint
 - `accepted` is an offer to help. Only the requester can report `endorsed` after acceptance. The leaderboard explicitly labels completions as author-reported; it is not verification by arXiv.
 - A private manuscript is readable by its author and active reviewers. Withdrawal/decline removes new access immediately. Shared annotation access remains restricted to author/active reviewer even if the manuscript is public. Personal notes remain author-only.
 - `paper.get` supplies a signed download URL valid for ten minutes. An already-issued URL remains usable until expiry; previously downloaded copies cannot be revoked. Production has no anonymous Storage reads.
-- Storage uploads are restricted to the authenticated owner's path, PDF content type and files smaller than 25 MiB (the UI uses a 20 MiB limit). Account deletion tombstones reject new uploads.
+- `paperbridgeUploadManuscript` accepts raw PDFs up to 20 MiB only after revoked-token and tenant checks. It holds an account lease, checks manuscript ownership, generates an immutable server-selected path, and creates the object with a generation precondition. Direct client Storage reads, creates, overwrites and deletes are denied.
 - Provider keys are encrypted as described in `docs/ai.md`. Exports include the user's content and AI settings/history, never provider credentials or another user's private annotations.
 - Deletion disables the Auth account, revokes refresh tokens and writes a permanent tombstone. Each running API/AI operation holds a transactionally registered lease, so deletion waits before purging and new operations cannot recreate data. An hourly job resumes incomplete deletions. Requests needed by the other participant retain an anonymized status record; deleted-account manuscript text, messages, keys, notes, feed posts and storage objects are removed.
 
 ## Deployment prerequisites
 
-1. A Firebase project on a billing-enabled plan, enabled Auth providers and a Storage bucket.
-2. Deploy `firestore.rules`, `firestore.indexes.json` and `storage.rules` alongside the functions. Storage rules use Firestore to check deletion tombstones; enable the cross-service permission requested by Firebase deployment.
+1. A billing-enabled Firebase project with a dedicated Auth tenant, named Firestore database, private bucket and runtime service account. See isolated runtime configuration below.
+2. Deploy `firestore.rules` and `firestore.indexes.json` to only the named database. `storage.rules` denies all direct client access when a Firebase Storage bucket is used. Production may use a dedicated private GCS bucket with uniform IAM access instead; never apply PaperBridge rules to another app's bucket.
 3. The runtime service account needs signing permission (`iam.serviceAccounts.signBlob`, typically Service Account Token Creator on that service account) to mint PDF URLs. Configure bucket CORS for the hosting origin and `GET`, `HEAD` using `docs/storage-cors.json`: `gcloud storage buckets update gs://YOUR_BUCKET --cors-file=docs/storage-cors.json`. Update its explicit origins if the hosting domain changes; no wildcard origin is needed.
-4. Store `AI_KEY_ENCRYPTION_KEY` (32 random bytes encoded as base64) and `SMTP_PASSWORD` in Firebase Secret Manager. Do not commit them or embed them in the SPA.
+4. Store `PAPERBRIDGE_AI_KEY_ENCRYPTION_KEY` (32 random bytes encoded as base64) and `PAPERBRIDGE_SMTP_PASSWORD` in Firebase Secret Manager. Do not commit them or embed them in the SPA.
 5. Configure non-secret function environment values `APP_URL`, `SMTP_HOST`, `SMTP_PORT` (465 default, implicit TLS; other ports require STARTTLS), `SMTP_USER`, and `EMAIL_FROM`. APP_URL defaults to `https://paperbridge.web.app`.
 6. Verify real SMTP delivery with the site's configured verified sender. No SMTP credentials are supplied in this repository, so production inbox delivery cannot be asserted from repository tests.
 
@@ -56,7 +56,7 @@ Bounded list responses return the newest records: feed 100, conversations 100, r
 
 `paper.save` creates revision 1 for a new manuscript. For existing manuscripts, changing the PDF storage path or extracted text increments `version`; metadata-only edits retain the version. Pass `expectedVersion` (inside `paper` or at the top level) to reject a stale replacement instead of silently overwriting another save. The category cannot change while any endorsement request is active.
 
-`versions` contains the latest twenty metadata records `{version, storagePath, fileName, updatedAt, title}`, including the current revision. Prior PDF objects are retained in the author's private paper folder until manuscript/account deletion. Client uploads are create-only: every replacement must use a fresh filename. Active requests retain their original title and gain `paperVersion`, `currentPaperTitle`, `paperUpdatedAt`, and `revisionAvailable`; reviewers receive an in-app notification when content changes. This does not change request status or send an email.
+`versions` contains the latest twenty metadata records `{version, storagePath, fileName, updatedAt, title}`, including the current revision. Prior PDF objects are retained in the author's private paper folder until manuscript/account deletion. Server uploads are create-only: every replacement receives a fresh UUID object name. Active requests retain their original title and gain `paperVersion`, `currentPaperTitle`, `paperUpdatedAt`, and `revisionAvailable`; reviewers receive an in-app notification when content changes. This does not change request status or send an email.
 
 `paper.version.get {id, version}` authorizes the owner or an active reviewer even when the current manuscript is public. It returns the paper with the selected revision's file/title/date metadata, a short-lived PDF URL, `currentVersion`, and the available history. Other manuscript metadata is current; extracted text is returned only for the current revision because historic extracted text is not retained. Revisions outside the twenty-entry history return `not-found`.
 
@@ -69,3 +69,20 @@ Annotations persist `paperVersion` and list responses normalize older notes with
 `paper.list` returns manuscript metadata plus `textCharacterCount` and omits extracted `text` and the `versions` history. The count is computed from existing documents, so manuscripts saved before this optimization need no migration. Fetch `paper.get` for the selected manuscript when full extracted text or history is needed.
 
 `ai.jobs` projects only `id`, `ownerId`, `paperId`, `title`, `status`, `createdAt`, and `updatedAt`. Findings, quotations, prompts/configuration, consent, errors and other report bodies are returned only by owner-authorized `ai.job.get`. These bounded summaries keep library/history responses small and avoid repeatedly transferring private manuscript and report bodies.
+
+
+## Isolated runtime configuration
+
+All functions use `PAPERBRIDGE_DATABASE_ID`, `PAPERBRIDGE_AUTH_TENANT_ID`, `PAPERBRIDGE_STORAGE_BUCKET`, and `PAPERBRIDGE_SERVICE_ACCOUNT`. Production must set these explicitly. A missing database, tenant or bucket fails closed; the production database cannot be `(default)`. The only default-resource fallback is local emulator use (Auth and Storage additionally require a `demo-` project). Never remove tenant configuration to work around sign-in problems.
+
+The callable rejects missing or mismatched `firebase.tenant` claims before reading Firestore, registering leases or counting requests. Auth administrative operations, including disable/revoke/delete, use the configured tenant's Admin Auth instance. The email trigger targets the configured named database. Restrict the dedicated service account's IAM to that database, tenant and bucket, its own signing permission, and the two namespaced secrets.
+
+Exports are `paperbridgeApi`, `paperbridgeUploadManuscript`, `paperbridgeSendQueuedEmail`, `paperbridgeRetryQueuedEmail`, and `paperbridgeRetryAccountDeletion`. Use the `paperbridge` Functions codebase in the shared production project. Local emulators use the same function names. The namespaced Secret Manager values are `PAPERBRIDGE_AI_KEY_ENCRYPTION_KEY` and `PAPERBRIDGE_SMTP_PASSWORD`; generic secret names are not production fallbacks.
+
+`functions/test/runtime.integration.cjs` proves mismatched/default tenant tokens cannot create leases, rate limits, deletion records or modify a parent-project sentinel; a valid tenant reads only its named database. It also checks tenant-specific Admin Auth, explicit bucket selection and missing-production-configuration rejection.
+
+## SMTP safeguards and free-tier setup
+
+Each send reserves one attempt transactionally against UTC hourly, daily and calendar-month budgets. Defaults are 50/hour, 250/day and 7,000/month; configure `EMAIL_HOURLY_LIMIT`, `EMAIL_DAILY_LIMIT`, and `EMAIL_MONTHLY_LIMIT` for the selected provider. Zero pauses that window. Excess mail stays queued until reset and does not consume an attempt. Actual send attempts, including retries and failed connections, consume the conservative local allowance. Missing credentials do not. Each message stops before a ninth attempt. These limits cover this app's outbox, not another app sharing a provider account. Provider quotas and reset clocks can differ.
+
+SMTP errors persist only allowlisted error codes and bounded numeric status codes; raw responses and credentials are never saved. TLS is mandatory. `EMAIL_REPLY_TO` can direct responses to the support inbox. A provider accepting mail does not prove final delivery: review its transactional logs and verify an actual recipient inbox during release. See [free email setup](email-setup.md) for provider prerequisites.
