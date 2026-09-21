@@ -121,7 +121,25 @@ async function chatDTO(chat: any, uid: string) {
   const pairs = await Promise.all(
     chat.members.map(async (id: string) => [id, await avatarUrl(id, uid)]),
   );
-  return { ...chat, avatarUrls: Object.fromEntries(pairs) };
+  const { unreadCounts, readThrough, ...publicChat } = chat;
+  const lastReadAt = readThrough?.[uid] || 0;
+  const unreadCount =
+    typeof unreadCounts?.[uid] === "number"
+      ? unreadCounts[uid]
+      : (
+          await db()
+            .collection("chatMessages")
+            .where("chatId", "==", chat.id)
+            .where("createdAt", ">", lastReadAt)
+            .orderBy("createdAt", "desc")
+            .get()
+        ).docs.filter((message) => message.data().authorId !== uid).length;
+  return {
+    ...publicChat,
+    avatarUrls: Object.fromEntries(pairs),
+    unreadCount,
+    lastReadAt,
+  };
 }
 
 async function required(collection: string, id: string): Promise<any> {
@@ -243,8 +261,11 @@ async function notification(
     body: string;
     presentation?: EmailPresentation;
   },
+  eventId?: string,
 ): Promise<void> {
-  const ref = db().collection("notifications").doc();
+  const ref = eventId
+    ? doc("notifications", eventId)
+    : db().collection("notifications").doc();
   writer.set(ref, { userId, title, body, link, read: false, createdAt: now });
   if (email?.to) {
     writer.set(doc("emailOutbox", ref.id), {
@@ -259,6 +280,36 @@ async function notification(
       createdAt: now,
       updatedAt: now,
     });
+  }
+}
+async function markNotificationsRead(
+  uid: string,
+  through: number,
+  link?: string,
+): Promise<number> {
+  let updated = 0;
+  for (;;) {
+    let query: Query = db()
+      .collection("notifications")
+      .where("userId", "==", uid)
+      .where("read", "==", false)
+      .where("createdAt", "<=", through);
+    if (link) query = query.where("link", "==", link);
+    const unread = await query.orderBy("createdAt", "desc").limit(400).get();
+    if (unread.empty) return updated;
+    // Compare the version we observed: a renewed like/follow notification must
+    // not be cleared by a read that began before that new activity occurred.
+    const batch = db().batch();
+    unread.docs.forEach((n) =>
+      batch.update(n.ref, { read: true }, { lastUpdateTime: n.updateTime }),
+    );
+    try {
+      await batch.commit();
+      updated += unread.size;
+    } catch (error: any) {
+      if (error.code === 9 || error.code === 5) continue;
+      throw error;
+    }
   }
 }
 function siteUrl(): string {
@@ -1080,6 +1131,7 @@ async function dispatchApi(
           fail("not-found", "This manuscript is no longer available.");
         const version = paper!.version || 1;
         const oldRequestId = previous.data()?.requestId || null;
+        let recipientId: string | null = null;
         const requestId =
           input.requestId === undefined
             ? oldRequestId
@@ -1104,9 +1156,14 @@ async function dispatchApi(
             );
           if (!D.ACTIVE_STATUSES.includes(request!.status))
             fail("failed-precondition", "This collaboration is closed.");
+          recipientId =
+            request!.requesterId === uid
+              ? request!.reviewerId
+              : request!.requesterId;
           const blocks = await tx.getAll(
             doc("blocks", blockId(request!.requesterId, request!.reviewerId)),
             doc("blocks", blockId(request!.reviewerId, request!.requesterId)),
+            doc("deletionJobs", recipientId!),
           );
           if (blocks.some((b) => b.exists))
             fail("permission-denied", "This collaboration is unavailable.");
@@ -1121,13 +1178,21 @@ async function dispatchApi(
             "The manuscript has a newer revision. Reload it before adding a note.",
           );
         if (paper!.ownerId !== uid) {
-          const requests = await tx.get(
-            db()
-              .collection("requests")
-              .where("paperId", "==", paperId)
-              .where("reviewerId", "==", uid),
-          );
+          const [requests, outgoing, incoming, deletion] = await Promise.all([
+            tx.get(
+              db()
+                .collection("requests")
+                .where("paperId", "==", paperId)
+                .where("reviewerId", "==", uid),
+            ),
+            tx.get(doc("blocks", blockId(uid, paper!.ownerId))),
+            tx.get(doc("blocks", blockId(paper!.ownerId, uid))),
+            tx.get(doc("deletionJobs", paper!.ownerId)),
+          ]);
           if (
+            outgoing.exists ||
+            incoming.exists ||
+            deletion.exists ||
             !requests.docs.some((r) =>
               D.ACTIVE_STATUSES.includes(r.data().status),
             )
@@ -1184,7 +1249,10 @@ async function dispatchApi(
           quote: D.text(input.quote, "Quote", 10000, false),
           body: D.text(input.body, "Note", 10000, false),
           color,
-          visibility: input.visibility === "shared" ? "shared" : "private",
+          visibility:
+            (input.visibility ?? previous.data()?.visibility) === "shared"
+              ? "shared"
+              : "private",
           rects,
           createdAt: previous.data()?.createdAt || Date.now(),
           updatedAt: Date.now(),
@@ -1192,6 +1260,19 @@ async function dispatchApi(
         if (!annotation.body && !annotation.quote && !rects.length)
           fail("invalid-argument", "Select text or write a note.");
         tx.set(doc("annotations", id), annotation);
+        if (
+          recipientId &&
+          annotation.visibility === "shared" &&
+          (!previous.exists || previous.data()?.visibility !== "shared")
+        )
+          await notification(
+            tx,
+            recipientId,
+            "New manuscript note",
+            `${author.name} added a note on page ${annotation.page} of “${paper!.title || "your manuscript"}”.`,
+            `/requests/${requestId}`,
+            annotation.updatedAt,
+          );
         return annotation;
       });
     }
@@ -1226,6 +1307,7 @@ async function dispatchApi(
           );
         if (note!.visibility !== "shared" && note!.authorId !== uid)
           fail("permission-denied", "This note is private.");
+        let recipientId: string | null = null;
         if (note!.requestId) {
           const request = (
             await tx.get(doc("requests", note!.requestId))
@@ -1241,9 +1323,14 @@ async function dispatchApi(
             );
           if (!D.ACTIVE_STATUSES.includes(request!.status))
             fail("failed-precondition", "This collaboration is closed.");
+          recipientId =
+            request!.requesterId === uid
+              ? request!.reviewerId
+              : request!.requesterId;
           const blocks = await tx.getAll(
             doc("blocks", blockId(request!.requesterId, request!.reviewerId)),
             doc("blocks", blockId(request!.reviewerId, request!.requesterId)),
+            doc("deletionJobs", recipientId!),
           );
           if (blocks.some((b) => b.exists))
             fail("permission-denied", "This collaboration is unavailable.");
@@ -1300,6 +1387,23 @@ async function dispatchApi(
             resolvedAt: input.resolved ? now : null,
           });
         tx.update(noteSnapshot.ref, patch);
+        if (
+          recipientId &&
+          note!.visibility === "shared" &&
+          (action === "annotation.reply" || note!.resolved !== input.resolved)
+        )
+          await notification(
+            tx,
+            recipientId,
+            action === "annotation.reply"
+              ? "New note reply"
+              : input.resolved
+                ? "Manuscript note resolved"
+                : "Manuscript note reopened",
+            `${author.name} ${action === "annotation.reply" ? "replied to" : input.resolved ? "resolved" : "reopened"} a note on page ${note!.page} of “${paper!.title || "your manuscript"}”.`,
+            `/requests/${note!.requestId}`,
+            now,
+          );
         return { ...note, id, ...patch };
       });
       return result;
@@ -1331,14 +1435,62 @@ async function dispatchApi(
               id: D.identifier(input.cursor.id),
             };
       const blocked = await hiddenUsers(uid);
-      const page = (query: Query) => {
-        query = query
+      const visible = (p: any) =>
+        !blocked.has(p.authorId) &&
+        !p.deleting &&
+        (p.visibility !== "private" || p.authorId === uid);
+      type FeedCursor = { createdAt: number; id: string };
+      type FeedPage = {
+        posts: any[];
+        nextCursor: FeedCursor | null;
+        hasMore: boolean;
+      };
+      const compare = (a: FeedCursor, b: FeedCursor) =>
+        b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+      const position = (post: any): FeedCursor => ({
+        createdAt: post.createdAt,
+        id: post.id,
+      });
+      const page = async (query: Query): Promise<FeedPage> => {
+        const ordered = query
           .orderBy("createdAt", "desc")
           .orderBy(FieldPath.documentId(), "desc");
-        if (cursor) query = query.startAfter(cursor.createdAt, cursor.id);
-        return query.limit(limit).get();
+        let next = cursor
+          ? ordered.startAfter(cursor.createdAt, cursor.id)
+          : ordered;
+        const result: any[] = [];
+        const chunkSize = Math.max(limit, 50);
+        // Hidden posts must not consume a visible page: otherwise a page of
+        // private drafts or blocked authors can hide every older public post.
+        let scanned = 0;
+        for (;;) {
+          const size = Math.min(chunkSize, 200 - scanned);
+          const chunk = await next.limit(size).get();
+          scanned += chunk.size;
+          result.push(...rows(chunk).filter(visible));
+          if (result.length >= limit)
+            return {
+              posts: result.slice(0, limit),
+              nextCursor: position(result[limit - 1]),
+              hasMore: true,
+            };
+          if (chunk.size < size)
+            return { posts: result, nextCursor: null, hasMore: false };
+          // A sparse/private-heavy feed must not scan the entire collection in
+          // one callable. Page-aware clients can continue even with no visible posts.
+          if (scanned >= 200) {
+            const last = chunk.docs[chunk.docs.length - 1];
+            return {
+              posts: result,
+              nextCursor: { createdAt: last.data().createdAt, id: last.id },
+              hasMore: true,
+            };
+          }
+          next = ordered.startAfter(chunk.docs[chunk.docs.length - 1]);
+        }
       };
       let all: any[];
+      let pages: FeedPage[] = [];
       if (
         [
           input.following === true,
@@ -1352,7 +1504,7 @@ async function dispatchApi(
           .collection("savedPosts")
           .where("userId", "==", uid)
           .orderBy("createdAt", "desc")
-          .limit(100)
+          .limit(500)
           .get();
         const ids = bookmarks.docs.map((d) => d.data().postId as string);
         const posts = ids.length
@@ -1368,13 +1520,14 @@ async function dispatchApi(
       } else if (input.authorId) {
         const authorId = D.identifier(input.authorId);
         await ensureUnblocked(uid, authorId);
-        all = rows(
+        pages = [
           await page(
             db().collection("posts").where("authorId", "==", authorId),
           ),
-        );
+        ];
+        all = pages[0].posts;
       } else if (input.following === true) {
-        // Creation caps follows at 300: at most ten 30-author queries and 1,000 post reads.
+        // Creation caps follows at 300: at most ten 30-author query streams.
         // Existing imports beyond that supported cap are bounded to the first 300 follows.
         const following = await db()
           .collection("follows")
@@ -1384,8 +1537,11 @@ async function dispatchApi(
         const ids = [
           ...new Set(following.docs.map((d) => d.data().followingId as string)),
         ].filter((id) => !blocked.has(id));
-        if (!ids.length) return [];
-        const batches: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+        if (!ids.length)
+          return input.includePageInfo === true
+            ? { posts: [], nextCursor: null, hasMore: false }
+            : [];
+        const batches: Promise<FeedPage>[] = [];
         for (let i = 0; i < ids.length; i += 30)
           batches.push(
             page(
@@ -1394,28 +1550,42 @@ async function dispatchApi(
                 .where("authorId", "in", ids.slice(i, i + 30)),
             ),
           );
-        all = (await Promise.all(batches)).flatMap(rows);
-      } else all = rows(await page(db().collection("posts")));
+        pages = await Promise.all(batches);
+        all = pages.flatMap((batch) => batch.posts);
+      } else {
+        pages = [await page(db().collection("posts"))];
+        all = pages[0].posts;
+      }
+      // Multiple followed-author streams can hit their scan cap at different
+      // points. Advance only through the earliest common frontier, deferring
+      // lower posts so subsequent pages neither skip nor repeat discussions.
+      const frontier =
+        pages
+          .filter((p) => p.hasMore && p.nextCursor)
+          .map((p) => p.nextCursor!)
+          .sort(compare)[0] || null;
       all = all
-        .filter(
-          (p: any) =>
-            !blocked.has(p.authorId) &&
-            !p.deleting &&
-            (p.visibility !== "private" || p.authorId === uid),
-        )
-        .sort(
-          (a, b) =>
-            b.createdAt - a.createdAt ||
-            (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
-        )
-        .slice(0, limit);
-      if (!all.length) return [];
-      const likes = await db().getAll(
-        ...all.map((p) => doc("likes", hash(`${uid}:${p.id}`))),
-      );
-      return Promise.all(
+        .filter(visible)
+        .filter((post) => !frontier || compare(post, frontier) <= 0)
+        .sort(compare);
+      const hasMore = !!frontier || all.length > limit;
+      all = all.slice(0, limit);
+      const nextCursor = hasMore
+        ? all.length >= limit
+          ? position(all[all.length - 1])
+          : frontier
+        : null;
+      const likes = all.length
+        ? await db().getAll(
+            ...all.map((p) => doc("likes", hash(`${uid}:${p.id}`))),
+          )
+        : [];
+      const posts = await Promise.all(
         all.map((p, index) => postDTO(p, uid, likes[index].exists)),
       );
+      return input.includePageInfo === true
+        ? { posts, nextCursor, hasMore }
+        : posts;
     }
     case "feed.get":
       return postDTO(await readablePost(D.identifier(input.id), uid), uid);
@@ -1538,12 +1708,13 @@ async function dispatchApi(
     }
     case "feed.like": {
       const id = D.identifier(input.id);
-      const post = await readablePost(id, uid);
+      await readablePost(id, uid);
       const like = doc("likes", hash(`${uid}:${id}`));
       return db().runTransaction(async (tx) => {
-        const [l, p] = await Promise.all([
+        const [l, p, actor] = await Promise.all([
           tx.get(like),
           transactionReadablePost(tx, id, uid),
+          tx.get(doc("profiles", uid)),
         ]);
         const liked = !l.exists;
         if (liked)
@@ -1551,6 +1722,17 @@ async function dispatchApi(
         else tx.delete(like);
         const likeCount = Math.max(0, (p.likeCount || 0) + (liked ? 1 : -1));
         tx.update(doc("posts", id), { likeCount });
+        if (liked && p.authorId !== uid)
+          await notification(
+            tx,
+            p.authorId,
+            "New like",
+            `${actor.data()?.name || "A researcher"} liked your post.`,
+            `/community#post-${id}`,
+            Date.now(),
+            undefined,
+            hash(`like:${uid}:${id}`),
+          );
         return { liked, likeCount };
       });
     }
@@ -1653,21 +1835,30 @@ async function dispatchApi(
           tx.delete(ref);
           return { following: false };
         }
-        const [target, outgoingBlock, incomingBlock, following] =
-          await Promise.all([
-            tx.get(doc("profiles", id)),
-            tx.get(doc("blocks", blockId(uid, id))),
-            tx.get(doc("blocks", blockId(id, uid))),
-            tx.get(
-              db()
-                .collection("follows")
-                .where("followerId", "==", uid)
-                .limit(300),
-            ),
-          ]);
+        const [
+          target,
+          outgoingBlock,
+          incomingBlock,
+          following,
+          actor,
+          deletion,
+        ] = await Promise.all([
+          tx.get(doc("profiles", id)),
+          tx.get(doc("blocks", blockId(uid, id))),
+          tx.get(doc("blocks", blockId(id, uid))),
+          tx.get(
+            db()
+              .collection("follows")
+              .where("followerId", "==", uid)
+              .limit(300),
+          ),
+          tx.get(doc("profiles", uid)),
+          tx.get(doc("deletionJobs", id)),
+        ]);
         if (
           !target.exists ||
           !target.data()?.publicProfile ||
+          deletion.exists ||
           outgoingBlock.exists ||
           incomingBlock.exists
         )
@@ -1685,6 +1876,16 @@ async function dispatchApi(
           followingId: id,
           createdAt: Date.now(),
         });
+        await notification(
+          tx,
+          id,
+          "New follower",
+          `${actor.data()?.name || "A researcher"} is now following you.`,
+          `/researchers/${uid}`,
+          Date.now(),
+          undefined,
+          hash(`follow:${uid}:${id}`),
+        );
         return { following: true };
       });
     }
@@ -1717,7 +1918,24 @@ async function dispatchApi(
       const id = pairId(uid, otherId);
       const ref = doc("chats", id);
       const opened = await db().runTransaction(async (tx) => {
-        const snap = await tx.get(ref);
+        const [snap, target, outgoing, incoming, deletion] = await tx.getAll(
+          ref,
+          doc("profiles", otherId),
+          doc("blocks", blockId(uid, otherId)),
+          doc("blocks", blockId(otherId, uid)),
+          doc("deletionJobs", otherId),
+        );
+        if (
+          !target.exists ||
+          !target.data()?.publicProfile ||
+          outgoing.exists ||
+          incoming.exists ||
+          deletion.exists
+        )
+          fail(
+            "permission-denied",
+            "This researcher is unavailable to message.",
+          );
         if (snap.exists) return data(snap);
         const chat = {
           id,
@@ -1726,6 +1944,10 @@ async function dispatchApi(
           createdAt: Date.now(),
           updatedAt: Date.now(),
           lastMessage: "",
+          lastMessageAt: 0,
+          lastMessageAuthorId: null,
+          unreadCounts: { [uid]: 0, [otherId]: 0 },
+          readThrough: { [uid]: 0, [otherId]: 0 },
         };
         tx.create(ref, chat);
         return chat;
@@ -1749,35 +1971,113 @@ async function dispatchApi(
     }
     case "chat.send": {
       const id = D.identifier(input.id);
-      const chat = await chatParticipant(id, uid);
-      const otherId = chat.members.find((m: string) => m !== uid);
-      await ensureUnblocked(uid, otherId);
       const body = D.text(input.body, "Message", 10000);
       const ref = db().collection("chatMessages").doc();
-      const now = Date.now();
-      const message = {
-        id: ref.id,
-        chatId: id,
-        authorId: uid,
-        body,
-        createdAt: now,
-      };
-      const batch = db().batch();
-      batch.create(ref, message);
-      batch.update(doc("chats", id), {
-        lastMessage: body.slice(0, 200),
-        updatedAt: now,
+      return db().runTransaction(async (tx) => {
+        const chat = (await tx.get(doc("chats", id))).data();
+        if (!chat || !chat.members.includes(uid))
+          fail("permission-denied", "This conversation is private.");
+        const otherId = chat!.members.find((member: string) => member !== uid);
+        if (!otherId || chat!.members.length !== 2)
+          fail(
+            "failed-precondition",
+            "This researcher is no longer available.",
+          );
+        const [target, outgoing, incoming, deletion] = await tx.getAll(
+          doc("profiles", otherId),
+          doc("blocks", blockId(uid, otherId)),
+          doc("blocks", blockId(otherId, uid)),
+          doc("deletionJobs", otherId),
+        );
+        if (
+          !target.exists ||
+          outgoing.exists ||
+          incoming.exists ||
+          deletion.exists
+        )
+          fail(
+            "permission-denied",
+            "This researcher is unavailable to message.",
+          );
+        let unreadCount = chat!.unreadCounts?.[otherId];
+        if (typeof unreadCount !== "number") {
+          const messages = await tx.get(
+            db()
+              .collection("chatMessages")
+              .where("chatId", "==", id)
+              .where("createdAt", ">", chat!.readThrough?.[otherId] || 0)
+              .orderBy("createdAt", "desc"),
+          );
+          unreadCount = messages.docs.filter(
+            (m) => m.data().authorId !== otherId,
+          ).length;
+        }
+        // A monotonic per-conversation timestamp makes a rendered-message cutoff
+        // unambiguous even when two messages arrive in the same millisecond.
+        const now = Math.max(Date.now(), (chat!.lastMessageAt || 0) + 1);
+        const message = {
+          id: ref.id,
+          chatId: id,
+          authorId: uid,
+          body,
+          createdAt: now,
+        };
+        tx.create(ref, message);
+        tx.update(doc("chats", id), {
+          lastMessage: body.slice(0, 200),
+          lastMessageAt: now,
+          lastMessageAuthorId: uid,
+          updatedAt: now,
+          unreadCounts: { ...chat!.unreadCounts, [otherId]: unreadCount + 1 },
+        });
+        await notification(
+          tx,
+          otherId,
+          "New message",
+          `${chat!.names[uid] || "A researcher"} sent you a message.`,
+          `/messages?chat=${id}`,
+          now,
+        );
+        return message;
       });
-      await notification(
-        batch,
-        otherId,
-        "New message",
-        `${chat.names[uid] || "A researcher"} sent you a message.`,
+    }
+    case "chat.read": {
+      const id = D.identifier(input.id);
+      const requestedThrough =
+        input.through === undefined
+          ? null
+          : D.number(input.through, "Read through", 0, Number.MAX_SAFE_INTEGER);
+      const result = await db().runTransaction(async (tx) => {
+        const chat = (await tx.get(doc("chats", id))).data();
+        if (!chat || !chat.members.includes(uid))
+          fail("permission-denied", "This conversation is private.");
+        const latest = chat!.lastMessageAt || chat!.updatedAt || 0;
+        const lastReadAt = Math.max(
+          chat!.readThrough?.[uid] || 0,
+          Math.min(requestedThrough ?? latest, latest),
+        );
+        const messages = await tx.get(
+          db()
+            .collection("chatMessages")
+            .where("chatId", "==", id)
+            .where("createdAt", ">", lastReadAt)
+            .orderBy("createdAt", "desc"),
+        );
+        const unreadCount = messages.docs.filter(
+          (m) => m.data().authorId !== uid,
+        ).length;
+        tx.update(doc("chats", id), {
+          readThrough: { ...chat!.readThrough, [uid]: lastReadAt },
+          unreadCounts: { ...chat!.unreadCounts, [uid]: unreadCount },
+        });
+        return { lastReadAt, unreadCount };
+      });
+      const updated = await markNotificationsRead(
+        uid,
+        result.lastReadAt,
         `/messages?chat=${id}`,
-        now,
       );
-      await batch.commit();
-      return message;
+      return { ...result, updated };
     }
     case "notifications.list": {
       const notifications = sorted(
@@ -1789,6 +2089,7 @@ async function dispatchApi(
             .limit(200)
             .get(),
         ),
+        200,
       );
       if (!notifications.length) return [];
       const emails = await db().getAll(
@@ -1808,16 +2109,18 @@ async function dispatchApi(
       return notifications.map((n) => ({ ...n, ...status.get(n.id) }));
     }
     case "notifications.read": {
-      const unread = await db()
-        .collection("notifications")
-        .where("userId", "==", uid)
-        .where("read", "==", false)
-        .limit(400)
-        .get();
-      const batch = db().batch();
-      unread.docs.forEach((n) => batch.update(n.ref, { read: true }));
-      await batch.commit();
-      return { updated: unread.size };
+      if (input.id !== undefined) {
+        const ref = doc("notifications", D.identifier(input.id));
+        return db().runTransaction(async (tx) => {
+          const notice = (await tx.get(ref)).data();
+          if (!notice || notice.userId !== uid)
+            fail("not-found", "This notification is unavailable.");
+          if (notice!.read) return { updated: 0 };
+          tx.update(ref, { read: true });
+          return { updated: 1 };
+        });
+      }
+      return { updated: await markNotificationsRead(uid, Date.now()) };
     }
     case "leaderboard.list": {
       const period = input.period === "all" ? "all" : "week";
@@ -2055,10 +2358,16 @@ export async function deleteAccount(uid: string): Promise<boolean> {
     .where("members", "array-contains", uid)
     .get();
   for (const c of chats.docs) {
+    const remainingMembers = c.data().members.filter((m: string) => m !== uid);
     await c.ref.update({
-      members: c.data().members.filter((m: string) => m !== uid),
+      members: remainingMembers,
       [`names.${uid}`]: "Deleted account",
       lastMessage: "",
+      lastMessageAt: 0,
+      lastMessageAuthorId: null,
+      unreadCounts: Object.fromEntries(
+        remainingMembers.map((member: string) => [member, 0]),
+      ),
       updatedAt: Date.now(),
     });
   }

@@ -10,11 +10,13 @@ The production homepage explains endorsement requests, category filters, researc
 
 ## What is implemented
 
+- A role-aware workspace overview with recent manuscripts, prioritized next steps, unread activity and setup guidance.
+- A dedicated activity inbox with individual/all read actions and research, discussion, connection and message filters. Chat has unread counts, recipient/conversation search, draft continuity and read cutoffs that preserve newer incoming messages.
 - Researcher and endorser onboarding, email/password and optional Google authentication, verification, recovery, public profiles, 155 canonical arXiv categories, self-attested eligibility, availability and capacity.
-- Private PDF manuscripts, immutable revisions, searchable PDF reader with thumbnails, fit-width/focus controls, persistent highlights, filtered private/shared notes, threaded replies and resolution, and extraction/coverage diagnostics.
+- Private PDF manuscripts, immutable revisions, searchable PDF reader with thumbnails, fit-width/focus controls, persistent highlights, editable private/shared notes, anchored navigation, drafts retained during workspace navigation, threaded replies and resolution, and extraction/coverage diagnostics.
 - Atomic endorsement requests with duplicate/capacity protection and a dedicated in-app collaboration workspace: stage tracking, manuscript and request-scoped shared notes, discussion, revisions and activity history. Reviewing/change-request/offer/decline/withdrawal states and author-reported arXiv completion remain explicit. Email provides notifications linking back into the workspace.
 - Branded HTML/plain-text verification, password recovery and two-recipient review emails, with an embedded logo, durable SMTP outbox, retry/backoff and honest queued/sent/failed visibility.
-- Community image/PDF posts, four post categories, edit/delete, saved reading lists, in-app attachment viewing, arXiv links, likes/comments, following, researcher profiles with photos, private chat, notifications, blocking and reporting. Authenticated media uploads are validated; images are decoded and re-encoded, file access is signed and temporary, and cleanup removes abandoned/replaced uploads.
+- Community image/PDF posts, four post categories, edit/delete, saved reading lists, in-app attachment viewing, arXiv links, likes/comments, following, paginated community/following feeds, researcher profiles with photos, private chat, notifications, blocking and reporting. Authenticated media uploads are validated; images are decoded and re-encoded, file access is signed and temporary, and cleanup removes abandoned/replaced uploads.
 - Encrypted per-user OpenAI/Anthropic/Gemini keys; dynamic model catalogs; five independently configured specialists for evidence, attribution, methods, formatting and submission readiness; GPT-6 Astra medium recommendation when available; full extracted-text or explicit partial coverage; synthesis and export, optional Crossref metadata tools, exact-quote grounding, source audit, explicit consent, usage limits, and safe retry IDs.
 - Account exports, provider-key removal, profile privacy and deletion with token revocation, in-flight operation leases, anonymization and retryable cleanup.
 - Responsive layouts, keyboard-accessible dialogs, empty/error/loading states, CSP/security headers and automated browser/access-control tests.
@@ -42,6 +44,8 @@ npx firebase emulators:start --only auth,firestore,storage,functions --project d
 ```
 
 Start Vite in another terminal with `VITE_FIREBASE_AUTH_TENANT_ID=` (empty), `VITE_USE_EMULATORS=true`, `VITE_FIREBASE_PROJECT_ID=demo-paperbridge`, `VITE_FIREBASE_STORAGE_BUCKET=demo-paperbridge.appspot.com`, and `VITE_FIREBASE_API_KEY=emulator-key`. Emulated verification emails are visible in the emulator output/UI. The tests verify email addresses through the Auth emulator only; there is no production verification bypass.
+
+See the [September experience audit](docs/experience-improvements.md) for specific fixes, independent review findings and release checks.
 
 ## Verification
 

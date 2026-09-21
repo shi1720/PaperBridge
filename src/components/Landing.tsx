@@ -188,10 +188,9 @@ export function Landing({
             </em>
           </h1>
           <p className="landing-intro">
-            Find potential arXiv endorsers by category, send a private
-            endorsement request, and strengthen your manuscript with feedback
-            and AI review. Build a research profile and a community around your
-            work.
+            Your manuscript, the right people, and a clear next step. Find
+            potential arXiv endorsers in your field, work through feedback on
+            your PDF, and build a research community along the way.
           </p>
           <div className="landing-actions">
             <button
@@ -230,6 +229,66 @@ export function Landing({
           <Users size={17} /> A social network for researchers
         </span>
       </div>
+
+      <section
+        className="lp-start-section"
+        aria-labelledby="starting-point-title"
+      >
+        <div className="lp-start-intro">
+          <p className="landing-eyebrow">THERE’S A PLACE FOR YOUR NEXT STEP</p>
+          <h2 id="starting-point-title">Where are you in your research?</h2>
+          <p>
+            Start with what you need today. The rest of your workspace is there
+            when you need it.
+          </p>
+        </div>
+        <div className="lp-start-grid">
+          <article>
+            <span className="lp-start-icon">
+              <FileText size={23} />
+            </span>
+            <span className="lp-micro">I’M WORKING ON A PAPER</span>
+            <h3>A quieter place to think.</h3>
+            <p>
+              Read your PDF, highlight a passage, and turn notes into a stronger
+              draft. Keep personal thoughts private and share feedback
+              deliberately.
+            </p>
+            <button onClick={() => onJoin("researcher")}>
+              Create a manuscript workspace <ArrowUpRight size={17} />
+            </button>
+          </article>
+          <article>
+            <span className="lp-start-icon">
+              <Users size={23} />
+            </span>
+            <span className="lp-micro">I NEED ENDORSEMENT SUPPORT</span>
+            <h3>Find a relevant connection.</h3>
+            <p>
+              Browse by arXiv category and availability. Share your manuscript
+              with one researcher and keep the conversation in a dedicated
+              review space.
+            </p>
+            <a href="#find-endorsers">
+              Explore the endorsement workflow <ArrowUpRight size={17} />
+            </a>
+          </article>
+          <article>
+            <span className="lp-start-icon">
+              <MessageSquare size={23} />
+            </span>
+            <span className="lp-micro">I CAN HELP OTHER RESEARCHERS</span>
+            <h3>Make room for good ideas.</h3>
+            <p>
+              Set your fields and review capacity. Read before you decide, offer
+              specific feedback, and pause new requests whenever you need to.
+            </p>
+            <button onClick={() => onJoin("endorser")}>
+              Set up your endorser profile <ArrowUpRight size={17} />
+            </button>
+          </article>
+        </div>
+      </section>
 
       <section className="lp-flow landing-section" id="how-it-works">
         <div className="landing-section-heading">

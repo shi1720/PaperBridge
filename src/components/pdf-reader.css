@@ -1122,3 +1122,256 @@
     font-size: 11px;
   }
 }
+
+/* Reading tools should be as legible as the manuscript they support. */
+.pb-reader-v2 {
+  border-radius: 16px;
+  border-color: #dce4da;
+}
+.pb-reader-v2 .pb-document-bar {
+  padding: 18px 20px;
+  background: #f7f9f4;
+}
+.pb-reader-v2 .pb-document-bar strong {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.pb-reader-v2 .pb-document-bar small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.pb-reader-v2 .pb-readonly-badge {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.pb-reader-v2 .pb-reader-toolbar {
+  padding: 10px 14px;
+  row-gap: 10px;
+}
+.pb-reader-v2 .pb-reader-pages {
+  font-size: 12px;
+  gap: 6px;
+}
+.pb-reader-v2 .icon-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+}
+.pb-reader-v2 .pb-page-jump {
+  font-size: 12px;
+}
+.pb-reader-v2 .pb-page-jump input {
+  width: 48px;
+  height: 34px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.pb-reader-v2 .pb-reader-hint {
+  font-size: 12px;
+  align-items: flex-start;
+}
+.pb-reader-v2 .pb-reader-hint > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.pb-reader-v2 .pb-nav-tabs > button,
+.pb-reader-v2 .pb-thumbnail > span,
+.pb-reader-v2 .pb-document-search label,
+.pb-reader-v2 .pb-document-search input,
+.pb-reader-v2 .pb-document-search > p,
+.pb-reader-v2 .pb-search-results p,
+.pb-reader-v2 .pb-search-results strong {
+  font-size: 12px;
+}
+.pb-reader-v2 .pb-document-search > small,
+.pb-reader-v2 .pb-search-results strong > span,
+.pb-reader-v2 .pb-thumbnail small {
+  font-size: 10px;
+}
+.pb-reader-v2 .pb-notes {
+  padding: 22px 18px;
+}
+.pb-reader-v2 .pb-notes-heading h3 {
+  font-size: 17px;
+}
+.pb-reader-v2 .pb-notes-help {
+  font-size: 12px;
+  line-height: 1.75;
+}
+.pb-reader-v2 .pb-note-form {
+  border-radius: 10px;
+  background: #f8faf6;
+}
+.pb-reader-v2 .pb-note-form > label,
+.pb-reader-v2 .pb-note-form textarea,
+.pb-reader-v2 .pb-note > p,
+.pb-reader-v2 .pb-note-thread textarea {
+  font-size: 13px;
+}
+.pb-reader-v2 .pb-note-form textarea {
+  min-height: 112px;
+  border-radius: 7px;
+}
+.pb-reader-v2 .pb-note-options label,
+.pb-reader-v2 .pb-note-options select,
+.pb-reader-v2 .pb-note-filters > select,
+.pb-reader-v2 .pb-note-search input,
+.pb-reader-v2 .pb-note-author,
+.pb-reader-v2 .pb-note-reply strong,
+.pb-reader-v2 .pb-note-reply p {
+  font-size: 12px;
+}
+.pb-reader-v2 .pb-note-options select,
+.pb-reader-v2 .pb-note-filters > select {
+  min-height: 38px;
+}
+.pb-reader-v2 .pb-note-options label:first-child {
+  flex: 1.8;
+}
+.pb-reader-v2 .pb-note-options label:last-child {
+  flex: 1;
+}
+.pb-reader-v2 .pb-note-form > .button {
+  font-size: 13px;
+  min-height: 40px;
+}
+.pb-reader-v2 .pb-notes-divider > span,
+.pb-reader-v2 .pb-note-counts,
+.pb-reader-v2 .pb-note-meta,
+.pb-reader-v2 .pb-note-author > time,
+.pb-reader-v2 .pb-draft-status {
+  font-size: 11px;
+  line-height: 1.6;
+}
+.pb-reader-v2 .pb-draft-status {
+  color: #586b4d;
+}
+.pb-reader-v2 .pb-note-meta > button:first-child,
+.pb-reader-v2 .pb-notes-divider button,
+.pb-reader-v2 .pb-note-actions > button,
+.pb-reader-v2 .pb-resolved-label,
+.pb-reader-v2 .pb-note-thread .button,
+.pb-reader-v2 .pb-notes-empty > p,
+.pb-reader-v2 .pb-note-thread .pb-thread-closed {
+  font-size: 12px;
+}
+.pb-reader-v2 .pb-selection blockquote,
+.pb-reader-v2 .pb-note > blockquote {
+  font-size: 12px;
+}
+.pb-reader-v2 .pb-selection .text-link {
+  font-size: 11px;
+}
+.pb-reader-v2 .pb-note {
+  border-radius: 10px;
+  padding: 16px 13px;
+}
+.pb-reader-v2 .pb-note-meta > .icon-button {
+  width: 30px;
+  height: 30px;
+}
+.pb-reader-v2 .pb-note-author {
+  flex-wrap: wrap;
+}
+.pb-reader-v2 .pb-note-author > strong {
+  max-width: calc(100% - 35px);
+}
+.pb-reader-v2 .pb-note-author > time {
+  margin-left: 28px;
+}
+.pb-reader-v2 .pb-note-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pb-reader-v2 .pb-highlight-active {
+  outline: 2px solid #648437;
+  outline-offset: 2px;
+  opacity: 0.55;
+}
+.pb-note-edit {
+  display: grid;
+  gap: 10px;
+}
+.pb-note-edit label {
+  font-size: 12px;
+  color: #405738;
+  font-weight: 600;
+}
+.pb-note-edit textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  resize: vertical;
+}
+.pb-note-edit .button,
+.pb-note-delete .button {
+  font-size: 12px;
+  min-height: 36px;
+}
+.pb-note-delete {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff7f2;
+  border: 1px solid #edd9ce;
+  border-radius: 8px;
+}
+.pb-note-delete p {
+  margin-bottom: 10px;
+}
+.pb-reader-v2 .pb-text-fallback {
+  padding: 16px;
+  background: white;
+  border: 1px solid #dce4da;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.pb-text-fallback summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+.pb-reader-v2 .pb-reader-status,
+.pb-reader-v2 .error-box {
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .pb-reader-v2 .pb-document-bar,
+  .pb-reader-v2 .pb-notes {
+    padding: 16px;
+  }
+  .pb-reader-v2 .pb-document-bar strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .pb-reader-v2 .pb-note-options {
+    flex-direction: column;
+  }
+  .pb-reader-v2 .pb-note-form textarea,
+  .pb-reader-v2 .pb-note-thread textarea,
+  .pb-reader-v2 .pb-note-search input,
+  .pb-reader-v2 .pb-document-search input,
+  .pb-reader-v2 .pb-note-options select,
+  .pb-reader-v2 .pb-note-filters > select,
+  .pb-reader-v2 .pb-note-edit textarea {
+    font-size: 16px;
+  }
+  .pb-reader-v2 .pb-reader-toolbar {
+    padding: 8px;
+  }
+  .pb-reader-v2 .pb-reader-pages {
+    gap: 2px;
+  }
+}
+@media (pointer: coarse), (max-width: 1024px) {
+  .pb-reader-v2 .pb-reader-pages .icon-button,
+  .pb-reader-v2 .pb-note-meta > .icon-button,
+  .pb-reader-v2 .pb-document-search .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .pb-reader-v2 .pb-page-jump input {
+    height: 44px;
+  }
+}

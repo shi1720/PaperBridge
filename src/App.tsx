@@ -24,14 +24,14 @@ import {
   BookOpen,
   LogOut,
   ShieldCheck,
-  PanelLeftClose,
-  Plus,
+  Home as HomeIcon,
 } from "lucide-react";
 import { useApp, useData } from "./lib/context";
 import { Avatar, Modal, Empty, Loading } from "./components/ui";
 import { AuthModal, Onboarding } from "./components/Auth";
 import { Discover } from "./components/Discover";
-import { notificationPath } from "./lib/notifications";
+import { Home } from "./components/Home";
+import { NotificationsPage } from "./components/Notifications";
 import { Landing } from "./components/Landing";
 const Papers = lazy(() =>
   import("./components/Papers").then((m) => ({ default: m.Papers })),
@@ -71,12 +71,14 @@ const ReviewStudio = lazy(() =>
   import("./components/Settings").then((m) => ({ default: m.ReviewStudio })),
 );
 const nav = [
+  ["/", "Overview", HomeIcon],
   ["/discover", "Find an endorser", Compass],
   ["/requests", "Endorsement requests", Inbox],
   ["/papers", "My manuscripts", FileText],
   ["/review", "Review studio", Sparkles],
   ["/community", "Community", Users],
   ["/messages", "Messages", MessagesSquare],
+  ["/notifications", "Activity", Bell],
   ["/impact", "Community impact", Trophy],
 ] as const;
 export default function App() {
@@ -97,8 +99,7 @@ export default function App() {
   const publicHome = routeLocation.pathname === "/" && !profile && !demo;
   const [authOpen, setAuthOpen] = useState(false),
     [mobile, setMobile] = useState(false),
-    [legal, setLegal] = useState(false),
-    [notices, setNotices] = useState(false);
+    [legal, setLegal] = useState(false);
   const [returnToAuth, setReturnToAuth] = useState(false);
   const [compactNavigation, setCompactNavigation] = useState(
     () => window.matchMedia("(max-width: 1024px)").matches,
@@ -159,8 +160,24 @@ export default function App() {
     "notifications.list",
     {},
     !!profile,
-    30000,
+    15000,
   );
+  const unreadCount = (notifications || []).filter((n: any) => !n.read).length;
+  const currentPage =
+    routeLocation.pathname === "/"
+      ? "Overview"
+      : nav.find(
+          ([path]) => path !== "/" && routeLocation.pathname.startsWith(path),
+        )?.[1] ||
+        (routeLocation.pathname.startsWith("/researchers")
+          ? "Researcher network"
+          : "Settings & privacy");
+  useEffect(() => {
+    if (!routeLocation.hash) window.scrollTo({ top: 0, behavior: "instant" });
+    document.title = publicHome
+      ? "PaperBridge — Build a stronger paper. Find your path to arXiv."
+      : `${currentPage} · PaperBridge`;
+  }, [routeLocation.pathname, currentPage, publicHome]);
   function requireAuth(
     role: "researcher" | "endorser" = "researcher",
     mode: "signup" | "login" = "signup",
@@ -206,19 +223,27 @@ export default function App() {
           <X />
         </button>
         <div className="workspace-label">YOUR RESEARCH, CONNECTED</div>
-        <nav>
-          {nav.map(([to, label, Icon], i) => (
+        <nav aria-label="Main navigation">
+          {nav.map(([to, label, Icon]) => (
             <NavLink
               key={to}
               to={to}
+              end={to === "/"}
               onClick={() => setMobile(false)}
               className={({ isActive }) =>
-                `${isActive ? "active" : ""} ${i === 4 ? "nav-divider" : ""}`
+                `${isActive ? "active" : ""} ${to === "/community" ? "nav-divider" : ""}`
               }
             >
               <Icon size={19} />
               <span>{label}</span>
-              {to === "/review" && <span className="nav-new">NEW</span>}
+              {to === "/notifications" && unreadCount > 0 && (
+                <span
+                  className="nav-unread"
+                  aria-label={`${unreadCount} unread updates`}
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -307,11 +332,11 @@ export default function App() {
             >
               <Menu />
             </button>
-            <span className="desktop-icon">
-              <PanelLeftClose size={17} />
+            <span className="desktop-icon" aria-hidden="true">
+              <BookOpen size={17} />
             </span>
-            <span className="breadcrumb-divider">/</span> A little connection. A
-            lot of possibility.
+            <span className="breadcrumb-divider">/</span>
+            <span className="current-page-name">{currentPage}</span>
           </div>
           <div className="top-actions">
             <span className="independent">
@@ -322,12 +347,18 @@ export default function App() {
                 <button
                   className="notification-button icon-button"
                   aria-label="Notifications"
-                  onClick={() => setNotices(true)}
+                  onClick={() => navigate("/notifications")}
                 >
                   <Bell size={19} />
                   {notifications?.some((x: any) => !x.read) && <i />}
                 </button>
-                <Avatar src={profile.avatarUrl} name={profile.name} />
+                <Link
+                  to={`/researchers/${profile.id}`}
+                  className="top-profile-link"
+                  aria-label="View your profile"
+                >
+                  <Avatar src={profile.avatarUrl} name={profile.name} />
+                </Link>
               </>
             ) : (
               <button
@@ -414,7 +445,7 @@ export default function App() {
                 path="/"
                 element={
                   demo || profile ? (
-                    <Discover onAuth={requireAuth} />
+                    <Home />
                   ) : (
                     <Landing
                       onJoin={(role) =>
@@ -456,6 +487,10 @@ export default function App() {
               <Route
                 path="/messages"
                 element={<Messages onAuth={requireAuth} />}
+              />
+              <Route
+                path="/notifications"
+                element={<NotificationsPage onAuth={requireAuth} />}
               />
               <Route path="/impact" element={<Impact />} />
               <Route
@@ -579,11 +614,6 @@ export default function App() {
           <p className="fine-print">Last updated September 21, 2026.</p>
         </div>
       </Modal>
-      <Notifications
-        open={notices}
-        onClose={() => setNotices(false)}
-        data={notifications || []}
-      />
       {import.meta.env.DEV && !profile && !publicHome && (
         <button
           className="demo-floating"
@@ -596,69 +626,5 @@ export default function App() {
         </button>
       )}
     </div>
-  );
-}
-function Notifications({
-  open,
-  onClose,
-  data,
-}: {
-  open: boolean;
-  onClose: () => void;
-  data: any[];
-}) {
-  const { call, refresh } = useApp();
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Your notifications"
-      description="Updates on your requests and conversations."
-    >
-      {data.length ? (
-        <>
-          <button
-            className="text-link"
-            onClick={async () => {
-              await call("notifications.read");
-              refresh();
-            }}
-          >
-            Mark all as read
-          </button>
-          {data.map((n) => (
-            <article className="notification" key={n.id}>
-              <Bell size={17} />
-              <div>
-                <strong>{n.title || "Research update"}</strong>
-                <p>{n.body}</p>
-                {notificationPath(n.link) && (
-                  <Link
-                    className="text-link"
-                    to={notificationPath(n.link)!}
-                    onClick={onClose}
-                  >
-                    Open update <ArrowRight size={14} />
-                  </Link>
-                )}
-                {n.emailStatus && (
-                  <small className="email-status">
-                    Email:{" "}
-                    {n.emailStatus === "sent"
-                      ? "accepted by delivery provider"
-                      : n.emailStatus}
-                    {n.emailIssue ? ` · ${n.emailIssue}` : ""}
-                  </small>
-                )}
-              </div>
-            </article>
-          ))}
-        </>
-      ) : (
-        <Empty title="You’re all caught up">
-          New messages and request updates will appear here.
-        </Empty>
-      )}
-    </Modal>
   );
 }

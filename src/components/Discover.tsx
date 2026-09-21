@@ -27,7 +27,8 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
     [available, setAvailable] = useState(true),
     [selected, setSelected] = useState<Profile | null>(null),
     [request, setRequest] = useState<Profile | null>(null),
-    [saved, setSaved] = useState<string[]>([]);
+    [saved, setSaved] = useState<string[]>([]),
+    [followingBusy, setFollowingBusy] = useState<string[]>([]);
   const follows = useData("follow.list", {}, !!profile);
   useEffect(() => {
     if (follows.data)
@@ -62,19 +63,23 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
       onAuth();
       return;
     }
+    if (followingBusy.includes(p.id)) return;
+    setFollowingBusy((current) => [...current, p.id]);
     try {
-      await call("follow.toggle", { id: p.id });
+      const result = await call("follow.toggle", { id: p.id });
+      const following =
+        typeof result.following === "boolean"
+          ? result.following
+          : !saved.includes(p.id);
       setSaved((s) =>
-        s.includes(p.id) ? s.filter((x) => x !== p.id) : [...s, p.id],
+        following ? [...new Set([...s, p.id])] : s.filter((x) => x !== p.id),
       );
       refresh();
-      toast(
-        saved.includes(p.id)
-          ? "Removed from your connections."
-          : "Following " + p.name,
-      );
+      toast(following ? "Following " + p.name : "Unfollowed " + p.name);
     } catch (e: any) {
       toast(e.message);
+    } finally {
+      setFollowingBusy((current) => current.filter((id) => id !== p.id));
     }
   }
   return (
@@ -255,6 +260,7 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
                     <button
                       aria-label={`${saved.includes(p.id) ? "Unfollow" : "Follow"} ${p.name}`}
                       aria-pressed={saved.includes(p.id)}
+                      disabled={followingBusy.includes(p.id)}
                       className={`icon-button save ${saved.includes(p.id) ? "saved" : ""}`}
                       onClick={() => follow(p)}
                     >
@@ -455,6 +461,13 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
             {selected.arxivUrl && (
               <External href={selected.arxivUrl}>arXiv author profile</External>
             )}
+            <Link
+              className="text-link"
+              to={`/researchers/${selected.id}`}
+              onClick={() => setSelected(null)}
+            >
+              View full researcher profile <ArrowUpRight size={16} />
+            </Link>
             <div className="button-row">
               <button
                 className="button primary"

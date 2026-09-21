@@ -6,6 +6,8 @@ import {
   useLocation,
 } from "react-router-dom";
 import {
+  ArrowLeft,
+  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   BookOpen,
@@ -13,6 +15,8 @@ import {
   FileText,
   Pencil,
   Lightbulb,
+  Link2,
+  Search,
   HelpCircle,
   Check,
   Flag,
@@ -31,6 +35,10 @@ import {
 } from "lucide-react";
 import { useApp, useData } from "../lib/context";
 import { date, type MediaAsset, type PostType } from "../lib/types";
+import {
+  mergeConversationMessages,
+  reconcileConversationSnapshot,
+} from "../lib/conversations";
 import { MediaPicker, PostAttachments } from "./CommunityMedia";
 import "./community.css";
 import {
@@ -188,6 +196,9 @@ export function Community({ onAuth }: { onAuth: () => void }) {
   const follows = useData("follow.list", {}, !!profile);
   const papers = useData("paper.list", {}, !!profile);
   const [tab, setTab] = useState<"all" | "following" | "saved">("all"),
+    [pageCursors, setPageCursors] = useState<
+      Array<{ createdAt: number; id: string } | null>
+    >([null]),
     [body, setBody] = useState(""),
     [postType, setPostType] = useState<PostType>("update"),
     [typeFilter, setTypeFilter] = useState("all"),
@@ -207,15 +218,30 @@ export function Community({ onAuth }: { onAuth: () => void }) {
   );
   const { data, error, loading } = useData(
     "feed.list",
-    { following: tab === "following", saved: tab === "saved" },
+    {
+      following: tab === "following",
+      saved: tab === "saved",
+      includePageInfo: true,
+      ...(pageCursors.at(-1) ? { cursor: pageCursors.at(-1) } : {}),
+    },
     !!profile && !focusId,
   );
   const focused = useData("feed.get", { id: focusId }, !!profile && !!focusId);
+  useEffect(() => {
+    if (!focusId || focused.data?.id !== focusId) return;
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(`post-${focusId}`)
+        ?.scrollIntoView({ block: "start", behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusId, focused.data?.id]);
   const loadedPosts = focusId
     ? focused.data
       ? [focused.data]
       : []
-    : list(data);
+    : list(Array.isArray(data) ? data : data?.posts);
+  const hasMore = !focusId && !!data?.hasMore && !!data?.nextCursor;
   const posts = loadedPosts.filter(
     (p) =>
       focusId ||
@@ -241,6 +267,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
       setPaperId("");
       setAttachments([]);
       setPostType("update");
+      setPageCursors([null]);
       if (focusId) navigate("/community");
       refresh();
       toast(
@@ -280,8 +307,14 @@ export function Community({ onAuth }: { onAuth: () => void }) {
     <>
       <PageHeading
         eyebrow="THE RESEARCH COMMONS"
-        title="Your research community."
-        description="Share papers and research updates, discuss ideas, follow researchers, and take the conversation into private messages."
+        title={
+          focusId ? "Research in conversation." : "Your research community."
+        }
+        description={
+          focusId
+            ? "Read the context, add a perspective, and help an idea move forward."
+            : "Share papers and research updates, discuss ideas, follow researchers, and take the conversation into private messages."
+        }
         action={
           profile ? (
             <div className="button-row">
@@ -289,7 +322,13 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                 <Users size={16} />
                 Find researchers
               </Link>
-              <button className="button" onClick={refresh}>
+              <button
+                className="button"
+                onClick={() => {
+                  setPageCursors([null]);
+                  refresh();
+                }}
+              >
                 <RefreshCw size={16} />
                 Refresh
               </button>
@@ -305,120 +344,129 @@ export function Community({ onAuth }: { onAuth: () => void }) {
       ) : (
         <div className="social-layout community-v2">
           <section className="social-feed">
-            <form className="card social-composer form" onSubmit={publish}>
-              <div className="social-author">
-                <Avatar name={profile.name} src={profile.avatarUrl} />
-                <div>
-                  <strong>What are you working on?</strong>
-                  <small>A question can be the start of a collaboration.</small>
-                  <Link
-                    className="text-link"
-                    to={"/researchers/" + encodeURIComponent(profile.id)}
-                  >
-                    View your research profile
-                  </Link>
+            {!focusId && (
+              <form className="card social-composer form" onSubmit={publish}>
+                <div className="social-author">
+                  <Avatar name={profile.name} src={profile.avatarUrl} />
+                  <div>
+                    <strong>What are you working on?</strong>
+                    <small>
+                      A question can be the start of a collaboration.
+                    </small>
+                    <Link
+                      className="text-link"
+                      to={"/researchers/" + encodeURIComponent(profile.id)}
+                    >
+                      View your research profile
+                    </Link>
+                  </div>
                 </div>
-              </div>
-              <div
-                className="post-type-choices"
-                role="group"
-                aria-label="Post type"
-              >
-                {POST_TYPES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    aria-pressed={postType === t.id}
-                    className={postType === t.id ? "selected" : ""}
-                    disabled={busy || uploading}
-                    onClick={() => setPostType(t.id)}
-                  >
-                    {t.id === "update" ? (
-                      <Lightbulb size={14} />
-                    ) : t.id === "question" ? (
-                      <HelpCircle size={14} />
-                    ) : t.id === "paper" ? (
-                      <FileText size={14} />
-                    ) : (
-                      <Trophy size={14} />
-                    )}{" "}
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <label className="sr-only" htmlFor="post-body">
-                Your community post
-              </label>
-              <textarea
-                id="post-body"
-                required
-                disabled={busy}
-                maxLength={10000}
-                rows={4}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder={POST_TYPES.find((t) => t.id === postType)?.prompt}
-              />
-              <MediaPicker
-                value={attachments}
-                onChange={setAttachments}
-                disabled={busy}
-                onBusy={setUploading}
-              />
-              <details className="post-link-options">
-                <summary>Add a research link or public manuscript</summary>
-                <div className="social-attachments">
-                  <label>
-                    arXiv paper link <span className="optional">optional</span>
-                    <input
-                      type="url"
-                      disabled={busy}
-                      value={arxivUrl}
-                      onChange={(e) => setArxivUrl(e.target.value)}
-                      placeholder="https://arxiv.org/abs/…"
-                    />
-                  </label>
-                  {list(papers.data).some((p) => p.visibility === "public") && (
-                    <label>
-                      Attach a public manuscript
-                      <select
-                        disabled={busy}
-                        value={paperId}
-                        onChange={(e) => setPaperId(e.target.value)}
-                      >
-                        <option value="">No manuscript</option>
-                        {list(papers.data)
-                          .filter((p) => p.visibility === "public")
-                          .map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.title}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-                  )}
-                </div>
-              </details>
-              <div className="social-compose-footer">
-                <span className="fine-print">
-                  <Users size={14} /> Visible to signed-in community members.
-                  Attachments are shared with your post. Keep confidential
-                  drafts private.
-                </span>
-                <button
-                  className="button primary"
-                  disabled={busy || uploading || !body.trim()}
+                <div
+                  className="post-type-choices"
+                  role="group"
+                  aria-label="Post type"
                 >
-                  {busy
-                    ? "Publishing…"
-                    : uploading
-                      ? "Uploading…"
-                      : "Publish post"}
-                  <ArrowUpRight size={16} />
-                </button>
-              </div>
-              {composeError && <ErrorBox message={composeError} />}
-            </form>
+                  {POST_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      aria-pressed={postType === t.id}
+                      className={postType === t.id ? "selected" : ""}
+                      disabled={busy || uploading}
+                      onClick={() => setPostType(t.id)}
+                    >
+                      {t.id === "update" ? (
+                        <Lightbulb size={14} />
+                      ) : t.id === "question" ? (
+                        <HelpCircle size={14} />
+                      ) : t.id === "paper" ? (
+                        <FileText size={14} />
+                      ) : (
+                        <Trophy size={14} />
+                      )}{" "}
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="sr-only" htmlFor="post-body">
+                  Your community post
+                </label>
+                <textarea
+                  id="post-body"
+                  required
+                  disabled={busy}
+                  maxLength={10000}
+                  rows={4}
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder={
+                    POST_TYPES.find((t) => t.id === postType)?.prompt
+                  }
+                />
+                <MediaPicker
+                  value={attachments}
+                  onChange={setAttachments}
+                  disabled={busy}
+                  onBusy={setUploading}
+                />
+                <details className="post-link-options">
+                  <summary>Add a research link or public manuscript</summary>
+                  <div className="social-attachments">
+                    <label>
+                      arXiv paper link{" "}
+                      <span className="optional">optional</span>
+                      <input
+                        type="url"
+                        disabled={busy}
+                        value={arxivUrl}
+                        onChange={(e) => setArxivUrl(e.target.value)}
+                        placeholder="https://arxiv.org/abs/…"
+                      />
+                    </label>
+                    {list(papers.data).some(
+                      (p) => p.visibility === "public",
+                    ) && (
+                      <label>
+                        Attach a public manuscript
+                        <select
+                          disabled={busy}
+                          value={paperId}
+                          onChange={(e) => setPaperId(e.target.value)}
+                        >
+                          <option value="">No manuscript</option>
+                          {list(papers.data)
+                            .filter((p) => p.visibility === "public")
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.title}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                </details>
+                <div className="social-compose-footer">
+                  <span className="fine-print">
+                    <Users size={14} /> Visible to signed-in community members.
+                    Attachments are shared with your post. Keep confidential
+                    drafts private.
+                  </span>
+                  <button
+                    className="button primary"
+                    disabled={busy || uploading || !body.trim()}
+                  >
+                    {busy
+                      ? "Publishing…"
+                      : uploading
+                        ? "Uploading…"
+                        : "Publish post"}
+                    <ArrowUpRight size={16} />
+                  </button>
+                </div>
+                {composeError && <ErrorBox message={composeError} />}
+              </form>
+            )}
             {focusId && (
               <div className="notice">
                 <strong>Discussion from your notification</strong>
@@ -429,14 +477,17 @@ export function Community({ onAuth }: { onAuth: () => void }) {
             )}
             <div className="social-feed-heading">
               <div
+                id="community-feed-start"
                 className="category-tabs"
                 role="group"
                 aria-label="Feed filter"
               >
                 <button
                   className={tab === "all" ? "active" : ""}
+                  aria-pressed={tab === "all" && !focusId}
                   onClick={() => {
                     setTab("all");
+                    setPageCursors([null]);
                     if (focusId) navigate("/community");
                   }}
                 >
@@ -444,8 +495,10 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                 </button>
                 <button
                   className={tab === "following" ? "active" : ""}
+                  aria-pressed={tab === "following" && !focusId}
                   onClick={() => {
                     setTab("following");
+                    setPageCursors([null]);
                     if (focusId) navigate("/community");
                   }}
                 >
@@ -453,8 +506,10 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                 </button>
                 <button
                   className={tab === "saved" ? "active" : ""}
+                  aria-pressed={tab === "saved" && !focusId}
                   onClick={() => {
                     setTab("saved");
+                    setPageCursors([null]);
                     if (focusId) navigate("/community");
                   }}
                 >
@@ -513,17 +568,34 @@ export function Community({ onAuth }: { onAuth: () => void }) {
             ) : !feedError ? (
               <Empty
                 title={
-                  tab === "saved"
-                    ? "A reading list for your research"
-                    : typeFilter !== "all"
-                      ? "Make space for this kind of conversation"
-                      : tab === "following"
-                        ? "Bring your people into focus"
-                        : "Every research community starts with a question"
+                  hasMore
+                    ? "More research is ahead"
+                    : pageCursors.length > 1
+                      ? "No posts on this page"
+                      : tab === "saved"
+                        ? "A reading list for your research"
+                        : typeFilter !== "all"
+                          ? "Make space for this kind of conversation"
+                          : tab === "following"
+                            ? "Bring your people into focus"
+                            : "Every research community starts with a question"
                 }
                 action={
-                  tab === "saved" ? (
-                    <button className="button" onClick={() => setTab("all")}>
+                  typeFilter !== "all" ? (
+                    <button
+                      className="button"
+                      onClick={() => setTypeFilter("all")}
+                    >
+                      Show all post types <ArrowRight size={16} />
+                    </button>
+                  ) : tab === "saved" ? (
+                    <button
+                      className="button"
+                      onClick={() => {
+                        setTab("all");
+                        setPageCursors([null]);
+                      }}
+                    >
                       Explore community posts <ArrowRight size={16} />
                     </button>
                   ) : tab === "following" ? (
@@ -543,15 +615,60 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                   )
                 }
               >
-                {tab === "saved"
-                  ? "Save useful papers, questions, and ideas from any post. Your reading list is private to you."
-                  : typeFilter !== "all"
-                    ? "No posts of this type in the current view. Choose another filter, or share something you are working on."
-                    : tab === "following"
-                      ? "Posts from the researchers you follow will appear here."
-                      : "A good question, an interesting preprint, a lesson learned: make room for someone else to build on it."}
+                {hasMore
+                  ? "There are no matching visible posts in this part of the feed. Continue browsing to see earlier conversations."
+                  : pageCursors.length > 1
+                    ? "Return to the previous page or refresh to see the newest community updates."
+                    : tab === "saved"
+                      ? "Save useful papers, questions, and ideas from any post. Your reading list is private to you."
+                      : typeFilter !== "all"
+                        ? "No posts of this type in the current view. Choose another filter, or share something you are working on."
+                        : tab === "following"
+                          ? "Posts from the researchers you follow will appear here."
+                          : "A good question, an interesting preprint, a lesson learned: make room for someone else to build on it."}
               </Empty>
             ) : null}
+            {!focusId && (hasMore || pageCursors.length > 1) && (
+              <nav
+                className="community-pagination"
+                aria-label="Community feed pages"
+              >
+                {pageCursors.length > 1 && (
+                  <button
+                    className="button"
+                    disabled={feedLoading}
+                    onClick={() => {
+                      setPageCursors((cursors) => cursors.slice(0, -1));
+                      document
+                        .getElementById("community-feed-start")
+                        ?.scrollIntoView({ block: "start" });
+                    }}
+                  >
+                    <ArrowLeft size={16} />
+                    Previous page
+                  </button>
+                )}
+                <span>Page {pageCursors.length}</span>
+                {hasMore && (
+                  <button
+                    className="button"
+                    disabled={feedLoading}
+                    onClick={() => {
+                      setPageCursors((cursors) => [
+                        ...cursors,
+                        data.nextCursor,
+                      ]);
+                      document
+                        .getElementById("community-feed-start")
+                        ?.scrollIntoView({ block: "start" });
+                    }}
+                  >
+                    Next posts
+                    <ArrowRight size={16} />
+                  </button>
+                )}
+              </nav>
+            )}
           </section>
           <aside className="right-rail">
             <section className="rail-card">
@@ -649,6 +766,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
 export function PostCard({
   post,
   following,
+  followUnavailable = false,
   openDiscussion = false,
   onFollow,
   onReport,
@@ -657,19 +775,23 @@ export function PostCard({
 }: {
   post: Row;
   following: boolean;
+  followUnavailable?: boolean;
   openDiscussion?: boolean;
   onFollow: () => Promise<void>;
   onReport: () => void;
   onDelete: () => void;
   onMessage: () => void;
 }) {
-  const { profile, call, refresh } = useApp();
+  const { profile, call, refresh, toast } = useApp();
   const [open, setOpen] = useState(openDiscussion),
     [comment, setComment] = useState(""),
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [editing, setEditing] = useState(false);
-  const comments = useData("feed.comments", { id: post.id }, open);
+  const comments = useData("feed.comments", { id: post.id }, open, 30000);
+  useEffect(() => {
+    if (openDiscussion) setOpen(true);
+  }, [openDiscussion]);
   async function act(name: string, fn: () => Promise<any>) {
     setBusy(name);
     setError("");
@@ -713,7 +835,7 @@ export function PostCard({
         {post.authorId !== profile?.id ? (
           <button
             className="button compact"
-            disabled={!!busy}
+            disabled={!!busy || followUnavailable}
             onClick={() => act("follow", onFollow)}
             aria-pressed={following}
           >
@@ -785,6 +907,23 @@ export function PostCard({
           }
         >
           <Bookmark size={16} fill={post.saved ? "currentColor" : "none"} />
+        </button>
+        <button
+          className="icon-button"
+          aria-label="Copy link to post"
+          title="Copy discussion link"
+          onClick={() =>
+            act("share", async () => {
+              await navigator.clipboard.writeText(
+                `${location.origin}/community#post-${encodeURIComponent(post.id)}`,
+              );
+              toast(
+                "Discussion link copied. Members can open it after signing in.",
+              );
+            })
+          }
+        >
+          <Link2 size={16} />
         </button>
         {post.authorId === profile?.id && (
           <button
@@ -889,13 +1028,16 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
   const { profile, call, refresh, toast, demo } = useApp();
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("chat") || "";
-  const chats = useData("chat.list", {}, !!profile);
-  const people = useData("directory.list", { scope: "researchers" }, !!profile);
+  const chats = useData("chat.list", {}, !!profile, 15000);
   const blocks = useData("block.list", {}, !!profile && !demo);
   const [messages, setMessages] = useState<Row[]>([]),
+    [loadedFor, setLoadedFor] = useState(""),
     [messageError, setMessageError] = useState(""),
     [loading, setLoading] = useState(false),
-    [draft, setDraft] = useState(""),
+    [drafts, setDrafts] = useState<Record<string, string>>({}),
+    [conversationSearch, setConversationSearch] = useState(""),
+    [atBottom, setAtBottom] = useState(true),
+    [newMessages, setNewMessages] = useState(0),
     [busy, setBusy] = useState(false),
     [tick, setTick] = useState(0),
     [newChat, setNewChat] = useState(false),
@@ -907,7 +1049,28 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
     [blockPrompt, setBlockPrompt] = useState(false),
     [blocking, setBlocking] = useState(false),
     [demoBlocked, setDemoBlocked] = useState<string[]>([]);
+  const [peopleQuery, setPeopleQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setPeopleQuery(search.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const people = useData(
+    "directory.list",
+    { scope: "researchers", search: peopleQuery },
+    !!profile && newChat,
+  );
   const end = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
+  const nearBottom = useRef(true);
+  const latestRead = useRef<Record<string, number>>({});
+  const readInFlight = useRef(false);
+  const sendSequence = useRef(0);
+  const acknowledgedSends = useRef(new Map<string, number>());
+  const draft = drafts[selectedId] || "";
+  const setDraft = (value: string) =>
+    setDrafts((previous) => ({ ...previous, [selectedId]: value }));
   const chat = list(chats.data).find((c) => c.id === selectedId),
     otherId =
       chat?.members?.find((id: string) => id !== profile?.id) || chat?.otherId,
@@ -916,62 +1079,130 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
     ? demoBlocked.includes(otherId)
     : list(blocks.data).some((b) => b.targetId === otherId);
   useEffect(() => {
-    setDraft("");
     setMessageError("");
+    nearBottom.current = true;
+    setAtBottom(true);
+    setNewMessages(0);
   }, [selectedId]);
   useEffect(() => {
     if (!selectedId || !profile) {
       setMessages([]);
       return;
     }
-    let stopped = false,
-      timer: ReturnType<typeof setTimeout>;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let polling = false;
     setLoading(true);
+    setLoadedFor("");
     setMessages([]);
     async function poll() {
-      if (document.visibilityState === "hidden") {
-        timer = setTimeout(poll, 15000);
-        return;
-      }
+      clearTimeout(timer);
+      if (polling || stopped) return;
+      if (document.visibilityState === "hidden") return;
+      polling = true;
+      const startedAfterSend = sendSequence.current;
       try {
         const rows = await call("chat.messages", { id: selectedId });
         if (!stopped) {
-          setMessages(list(rows));
+          const newerSends = new Set(
+            [...acknowledgedSends.current]
+              .filter(([, sequence]) => sequence > startedAfterSend)
+              .map(([id]) => id),
+          );
+          setMessages((current) =>
+            reconcileConversationSnapshot(
+              current as any[],
+              list(rows) as any[],
+              newerSends,
+            ),
+          );
+          for (const [id, sequence] of acknowledgedSends.current) {
+            if (sequence <= startedAfterSend)
+              acknowledgedSends.current.delete(id);
+          }
+          setLoadedFor(selectedId);
           setMessageError("");
         }
       } catch (e: any) {
         if (!stopped) setMessageError(e.message);
       } finally {
+        polling = false;
         if (!stopped) {
           setLoading(false);
           timer = setTimeout(poll, 15000);
         }
       }
     }
+    const resume = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", resume);
     void poll();
     return () => {
       stopped = true;
       clearTimeout(timer);
+      document.removeEventListener("visibilitychange", resume);
     };
   }, [selectedId, profile?.id, call, tick]);
   useEffect(() => {
-    end.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [messages.length, selectedId]);
+    if (!messages.length) return;
+    if (nearBottom.current) {
+      end.current?.scrollIntoView({ behavior: "auto", block: "nearest" });
+      setNewMessages(0);
+    } else {
+      setNewMessages((count) => count + 1);
+    }
+  }, [messages.at(-1)?.id, selectedId]);
+  const latestMessageAt =
+    loadedFor === selectedId ? messages.at(-1)?.createdAt || 0 : 0;
+  useEffect(() => {
+    if (
+      !selectedId ||
+      !atBottom ||
+      !latestMessageAt ||
+      document.visibilityState === "hidden" ||
+      readInFlight.current
+    )
+      return;
+    if ((latestRead.current[selectedId] || 0) >= latestMessageAt) return;
+    let active = true;
+    readInFlight.current = true;
+    void call("chat.read", { id: selectedId, through: latestMessageAt })
+      .then(() => {
+        latestRead.current[selectedId] = latestMessageAt;
+        if (active) refresh();
+      })
+      .catch(() => {
+        // Keep the unread state intact; the next poll will retry.
+      })
+      .finally(() => {
+        readInFlight.current = false;
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedId, latestMessageAt, atBottom, call, messages]);
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!selectedId) return;
+    if (!selectedId || !draft.trim() || busy || blocked) return;
+    const conversationId = selectedId;
     setBusy(true);
     setMessageError("");
     try {
       const sent = await call("chat.send", {
-        id: selectedId,
+        id: conversationId,
         body: draft.trim(),
       });
-      setMessages((rows) => [...rows, sent]);
-      setDraft("");
+      acknowledgedSends.current.set(sent.id, ++sendSequence.current);
+      setDrafts((previous) => ({ ...previous, [conversationId]: "" }));
+      if (selectedRef.current === conversationId) {
+        nearBottom.current = true;
+        setAtBottom(true);
+        setMessages((rows) => mergeConversationMessages(rows as any[], [sent]));
+      }
       refresh();
     } catch (e: any) {
-      setMessageError(e.message);
+      if (selectedRef.current === conversationId) setMessageError(e.message);
     } finally {
       setBusy(false);
     }
@@ -1020,10 +1251,18 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
   const available = list(people.data).filter(
     (p) =>
       p.id !== profile?.id &&
-      `${p.name} ${p.headline || ""}`
+      `${p.name} ${p.headline || ""} ${p.institution || ""}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  const visibleChats = list(chats.data).filter((conversation) => {
+    const other =
+      conversation.members?.find((id: string) => id !== profile?.id) ||
+      conversation.otherId;
+    return `${conversation.names?.[other] || conversation.name || "Researcher"} ${conversation.lastMessage || ""}`
+      .toLowerCase()
+      .includes(conversationSearch.trim().toLowerCase());
+  });
   return (
     <>
       <PageHeading
@@ -1050,7 +1289,9 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
         </SignInCard>
       ) : (
         <>
-          <div className="chat-layout card">
+          <div
+            className={`chat-layout chat-v2 card ${selectedId ? "has-conversation" : ""}`}
+          >
             <aside className="chat-sidebar">
               <div className="chat-sidebar-heading">
                 <strong>Conversations</strong>
@@ -1066,11 +1307,22 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                   <RefreshCw size={16} />
                 </button>
               </div>
+              <label className="chat-search">
+                <Search size={16} />
+                <input
+                  aria-label="Search conversations"
+                  placeholder="Search conversations"
+                  value={conversationSearch}
+                  onChange={(event) =>
+                    setConversationSearch(event.target.value)
+                  }
+                />
+              </label>
               {chats.error && <ErrorBox message={chats.error} />}{" "}
               {chats.loading && !chats.data ? (
                 <Loading />
-              ) : list(chats.data).length ? (
-                list(chats.data).map((c) => {
+              ) : visibleChats.length ? (
+                visibleChats.map((c) => {
                   const other =
                     c.members?.find((id: string) => id !== profile.id) ||
                     c.otherId;
@@ -1079,7 +1331,8 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                     <button
                       key={c.id}
                       disabled={busy}
-                      className={`chat-list-item ${selectedId === c.id ? "active" : ""}`}
+                      className={`chat-list-item ${selectedId === c.id ? "active" : ""} ${c.unreadCount > 0 ? "unread" : ""}`}
+                      aria-current={selectedId === c.id ? "true" : undefined}
                       onClick={() => setParams({ chat: c.id })}
                     >
                       <Avatar name={name} src={c.avatarUrls?.[other]} />
@@ -1087,14 +1340,28 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                         <strong>{name}</strong>
                         <p>{c.lastMessage || "Start with a hello."}</p>
                       </div>
-                      <time>{date(c.updatedAt || c.createdAt)}</time>
+                      <span className="chat-list-meta">
+                        <time>{date(c.updatedAt || c.createdAt)}</time>
+                        {c.unreadCount > 0 && (
+                          <span
+                            className="chat-unread-count"
+                            aria-label={`${c.unreadCount} unread messages`}
+                          >
+                            {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                          </span>
+                        )}
+                      </span>
                     </button>
                   );
                 })
               ) : (
                 <div className="chat-sidebar-empty">
                   <MessageSquare size={24} />
-                  <p>A new connection starts with hello.</p>
+                  <p>
+                    {conversationSearch
+                      ? "No conversations match your search."
+                      : "A new connection starts with hello."}
+                  </p>
                   <button
                     className="text-link"
                     onClick={() => setNewChat(true)}
@@ -1108,13 +1375,29 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
               {selectedId ? (
                 <>
                   <header className="chat-thread-header">
+                    <button
+                      className="icon-button chat-back"
+                      aria-label="Back to conversations"
+                      onClick={() => setParams({})}
+                    >
+                      <ArrowLeft size={19} />
+                    </button>
                     <div className="social-author">
                       <Avatar
                         name={otherName}
                         src={chat?.avatarUrls?.[otherId]}
                       />
                       <div>
-                        <strong>{otherName}</strong>
+                        {otherId ? (
+                          <Link
+                            className="researcher-name"
+                            to={`/researchers/${encodeURIComponent(otherId)}`}
+                          >
+                            {otherName}
+                          </Link>
+                        ) : (
+                          <strong>{otherName}</strong>
+                        )}
                         <small>
                           {blocked
                             ? "Contact blocked"
@@ -1156,10 +1439,23 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                   </header>
                   <div
                     className="chat-messages"
+                    ref={scroller}
+                    role="log"
                     aria-live="polite"
                     aria-label="Conversation messages"
+                    onScroll={(event) => {
+                      const element = event.currentTarget;
+                      const bottom =
+                        element.scrollHeight -
+                          element.scrollTop -
+                          element.clientHeight <
+                        80;
+                      nearBottom.current = bottom;
+                      setAtBottom(bottom);
+                      if (bottom) setNewMessages(0);
+                    }}
                   >
-                    {loading ? (
+                    {loading || (loadedFor !== selectedId && !messageError) ? (
                       <Loading />
                     ) : messages.length ? (
                       messages.map((m) => (
@@ -1185,6 +1481,22 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                     )}
                     <div ref={end} />
                   </div>
+                  {!atBottom && newMessages > 0 && (
+                    <button
+                      className="chat-new-messages"
+                      onClick={() => {
+                        nearBottom.current = true;
+                        setAtBottom(true);
+                        setNewMessages(0);
+                        end.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "nearest",
+                        });
+                      }}
+                    >
+                      New messages <ArrowDown size={15} />
+                    </button>
+                  )}
                   {messageError && <ErrorBox message={messageError} />}{" "}
                   {blocks.error && (
                     <ErrorBox
@@ -1205,6 +1517,16 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                       value={draft}
                       disabled={busy || blocked || !chat}
                       onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(event) => {
+                        if (
+                          (event.ctrlKey || event.metaKey) &&
+                          event.key === "Enter" &&
+                          !event.nativeEvent.isComposing
+                        ) {
+                          event.preventDefault();
+                          event.currentTarget.form?.requestSubmit();
+                        }
+                      }}
                       placeholder={
                         blocked
                           ? "Unblock this researcher to send a message."
@@ -1226,6 +1548,10 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                       )}
                     </button>
                   </form>
+                  <p className="chat-compose-hint">
+                    Enter for a new line · Ctrl or ⌘ + Enter to send. Drafts
+                    stay here while you switch conversations.
+                  </p>
                 </>
               ) : (
                 <Empty
@@ -1251,7 +1577,12 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
       )}
       <Modal
         open={newChat}
-        onClose={() => setNewChat(false)}
+        onClose={() => {
+          if (!opening) {
+            setNewChat(false);
+            setOpenError("");
+          }
+        }}
         title="Start a conversation"
         description="Choose a researcher and introduce your work with care."
       >
@@ -1260,8 +1591,12 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
             Find a researcher
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name or research interests"
+              disabled={opening}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setRecipient("");
+              }}
+              placeholder="Search name, institution, or research interests"
             />
           </label>
           {people.error && <ErrorBox message={people.error} />}
@@ -1270,6 +1605,7 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
             <select
               required
               value={recipient}
+              disabled={opening || people.loading}
               onChange={(e) => setRecipient(e.target.value)}
             >
               <option value="">Select a researcher</option>
@@ -1280,11 +1616,19 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
               ))}
             </select>
           </label>
-          {!available.length && (
-            <p className="muted">No matching public profiles yet.</p>
-          )}
+          {people.loading ? (
+            <Loading />
+          ) : !available.length && !people.error ? (
+            <p className="muted">
+              No matching public profiles yet. Try a different name or
+              institution.
+            </p>
+          ) : null}
           {openError && <ErrorBox message={openError} />}
-          <button className="button primary" disabled={opening || !recipient}>
+          <button
+            className="button primary"
+            disabled={opening || people.loading || !recipient}
+          >
             {opening ? "Opening…" : "Open conversation"}
             <ArrowRight size={16} />
           </button>

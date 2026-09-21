@@ -86,6 +86,8 @@ for (const viewport of sizes) {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     for (const route of [
+      "",
+      "notifications",
       "discover",
       "papers",
       "papers/demo-paper",

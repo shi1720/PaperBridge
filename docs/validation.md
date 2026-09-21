@@ -1,5 +1,13 @@
 # Validation record — 2026-09-21
 
+## Latest research-experience release
+
+The follow-up audit added a workspace overview, a dedicated activity inbox, unread chat state, paginated feeds and saved discussions, editable PDF notes with navigation-safe drafts, larger responsive controls, and revised profile/landing layouts. Independent review also fixed stale chat snapshots and query-scope state races.
+
+Verification: 27 frontend unit tests, 41 backend unit tests, 75 Firebase emulator integrations, and 73 Chromium/WebKit browser checks passed. The production-only demo exclusion check passed separately against the production build. Dependency audits report zero known vulnerabilities in both packages. A real GPT-6 Astra medium run completed all five specialists plus synthesis with exact manuscript quotations; see [live AI record](live-experience-ai-verification.json).
+
+See the [experience audit](experience-improvements.md) for behavior, test coverage, limitations and the opt-in live verification procedure. Earlier release records below are historical; their smaller test counts and earlier AI pipeline refer to those releases.
+
 The redesigned public homepage is deployed at [paperbridge.web.app](https://paperbridge.web.app), with fictional profiles and the demo removed from production. Email/password account registration is enabled after the live service and email-delivery checks below. The backend now uses isolated resources in the owner's existing billed GCP project; the original new-project billing quota no longer blocks deployment.
 
 ## Automatic checks
