@@ -19,11 +19,30 @@ async function loaded(page: Page, route: string) {
     await expect(page.locator(".pb-pdf-page canvas")).toBeVisible();
 }
 async function contained(page: Page) {
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth - innerWidth,
-    ),
-  ).toBeLessThanOrEqual(1);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - innerWidth,
+  );
+  if (overflow > 1) {
+    console.log(
+      "Responsive overflow details",
+      await page.locator("main *").evaluateAll((elements) =>
+        elements
+          .filter(
+            (el) => el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1,
+          )
+          .slice(0, 12)
+          .map((el) => ({
+            tag: el.tagName,
+            class: el.className,
+            width: el.clientWidth,
+            scrollWidth: el.scrollWidth,
+            right: el.getBoundingClientRect().right,
+            text: el.textContent?.slice(0, 60),
+          })),
+      ),
+    );
+  }
+  expect(overflow).toBeLessThanOrEqual(1);
   // Also catch controls clipped by a parent's overflow:hidden. Intentional carousels
   // and PDF pan regions remain scrollable and are checked in their workflow tests.
   const clipped = await page
