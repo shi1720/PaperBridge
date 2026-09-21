@@ -2556,13 +2556,15 @@ footer span {
     gap: 14px;
   }
 }
-@media (max-width: 780px) {
+@media (max-width: 1024px) {
   .sidebar {
     transform: translateX(-100%);
     transition: transform 0.2s;
-    width: 250px;
+    visibility: hidden;
+    width: min(300px, calc(100vw - 32px));
   }
   .sidebar.open {
+    visibility: visible;
     transform: translateX(0);
   }
   .sidebar-scrim {
@@ -4562,5 +4564,112 @@ textarea::placeholder {
 @media (max-width: 600px) {
   .researcher-profile {
     padding: 22px;
+  }
+}
+
+/* Keep navigation reachable on short screens and leave iPad widths for the work. */
+.sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sidebar > * {
+  flex-shrink: 0;
+}
+.sidebar .account > div {
+  min-width: 0;
+}
+.sidebar .account strong {
+  overflow-wrap: anywhere;
+}
+.settings-layout > *,
+.review-workspace > *,
+.form-grid > * {
+  min-width: 0;
+}
+.settings-layout .button {
+  white-space: normal;
+}
+.settings-tabs {
+  flex-wrap: wrap;
+}
+.settings-tabs > button {
+  min-height: 44px;
+  padding: 10px 0;
+}
+.modal {
+  max-height: min(90vh, calc(100dvh - 32px));
+  overscroll-behavior: contain;
+}
+.modal-heading h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1024px) {
+  .sidebar {
+    padding-top: 24px;
+  }
+  .sidebar .brand {
+    margin-right: 32px;
+  }
+  .sidebar .mobile-close {
+    top: 18px;
+    right: 8px;
+  }
+  .sidebar-callout {
+    display: none;
+  }
+  .sidebar-bottom {
+    padding-top: 20px;
+  }
+  .mobile-toggle,
+  .mobile-close,
+  .notification-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .sidebar .legal-link,
+  .sidebar .settings-link {
+    min-height: 44px;
+  }
+}
+@media (max-width: 600px) {
+  .settings-tabs {
+    column-gap: 20px;
+    row-gap: 0;
+  }
+  .settings-item,
+  .settings-item > span {
+    flex-wrap: wrap;
+  }
+  .settings-item > div {
+    min-width: 0;
+  }
+  .removable button {
+    min-width: 32px;
+    min-height: 32px;
+    align-items: center;
+    justify-content: center;
+  }
+}
+/* 16px fields prevent focus zoom on touch browsers without disabling pinch zoom. */
+@media (pointer: coarse), (max-width: 600px) {
+  .app :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+  .modal
+    :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: 16px;
+    min-width: 0;
+  }
+}
+
+/* WebKit's native select text can otherwise overflow even a correctly sized box. */
+select {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (pointer: coarse), (max-width: 600px) {
+  select {
+    height: 44px;
   }
 }

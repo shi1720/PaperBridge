@@ -107,7 +107,7 @@ export function SettingsPage({ onAuth }: { onAuth: () => void }) {
           ) : undefined
         }
       />
-      <div className="tabs">
+      <div className="tabs settings-tabs" aria-label="Settings sections">
         {[
           ["profile", "Research profile"],
           ["ai", "AI & API keys"],

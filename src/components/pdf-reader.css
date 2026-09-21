@@ -1079,3 +1079,46 @@
 .pb-note-search input {
   width: 100%;
 }
+
+/* Touch controls retain their hit area while both toolbar groups wrap independently. */
+@media (pointer: coarse), (max-width: 1024px) {
+  .pb-reader-v2 .pb-reader-pages {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+  .pb-reader-v2 .pb-reader-pages .icon-button,
+  .pb-reader-v2 .pb-note-meta > .icon-button,
+  .pb-document-search .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .pb-page-jump input {
+    height: 44px;
+  }
+  .pb-toolbar-divider {
+    display: none;
+  }
+  .pb-nav-tabs > button,
+  .pb-note-actions > button,
+  .pb-notes-divider button {
+    min-height: 44px;
+  }
+  .pb-reader-v2 .pb-reader-hint {
+    font-size: 12px;
+  }
+  .pb-reader-v2 .pb-reader-scroll {
+    max-height: min(690px, 72dvh);
+  }
+}
+@media (max-width: 600px) {
+  .pb-reader-v2 .pb-note-options,
+  .pb-reader-v2 .pb-note-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pb-reader-v2 .pb-notes {
+    padding: 14px;
+  }
+  .pb-reader-v2 .pb-document-bar small {
+    font-size: 11px;
+  }
+}

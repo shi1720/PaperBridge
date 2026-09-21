@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import {
   Link,
   NavLink,
@@ -100,6 +100,57 @@ export default function App() {
     [legal, setLegal] = useState(false),
     [notices, setNotices] = useState(false);
   const [returnToAuth, setReturnToAuth] = useState(false);
+  const [compactNavigation, setCompactNavigation] = useState(
+    () => window.matchMedia("(max-width: 1024px)").matches,
+  );
+  const sidebarRef = useRef<HTMLElement>(null);
+  const navigationTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 1024px)");
+    const update = () => {
+      setCompactNavigation(query.matches);
+      if (!query.matches) setMobile(false);
+    };
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  useEffect(() => setMobile(false), [routeLocation.pathname]);
+  useEffect(() => {
+    if (!mobile || !compactNavigation) return;
+    const sidebar = sidebarRef.current;
+    if (!sidebar) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = requestAnimationFrame(() => {
+      sidebar.querySelector<HTMLButtonElement>(".mobile-close")?.focus();
+    });
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobile(false);
+      }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(
+        sidebar.querySelectorAll<HTMLElement>(
+          'a[href], button:not(:disabled), [tabindex="0"]',
+        ),
+      ).filter((element) => element.getClientRects().length > 0);
+      const current = controls.indexOf(document.activeElement as HTMLElement);
+      const next = event.shiftKey
+        ? (current - 1 + controls.length) % controls.length
+        : (current + 1) % controls.length;
+      event.preventDefault();
+      controls[next]?.focus();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKey);
+      if (window.matchMedia("(max-width: 1024px)").matches)
+        navigationTrigger.current?.focus();
+    };
+  }, [mobile, compactNavigation]);
   const [authIntent, setAuthIntent] = useState<{
     role: "researcher" | "endorser";
     mode: "signup" | "login";
@@ -114,6 +165,7 @@ export default function App() {
     role: "researcher" | "endorser" = "researcher",
     mode: "signup" | "login" = "signup",
   ) {
+    setMobile(false);
     setAuthIntent({ role, mode });
     setAuthOpen(true);
   }
@@ -131,8 +183,16 @@ export default function App() {
       {mobile && (
         <div className="sidebar-scrim" onClick={() => setMobile(false)} />
       )}
-      <aside className={`sidebar ${mobile ? "open" : ""}`}>
-        <NavLink to="/" className="brand">
+      <aside
+        id="workspace-navigation"
+        ref={sidebarRef}
+        className={`sidebar ${mobile ? "open" : ""}`}
+        inert={compactNavigation && !mobile}
+        role={compactNavigation && mobile ? "dialog" : undefined}
+        aria-modal={compactNavigation && mobile ? true : undefined}
+        aria-label="Workspace navigation"
+      >
+        <NavLink to="/" className="brand" onClick={() => setMobile(false)}>
           <span className="brand-symbol">
             <BookOpen size={22} />
           </span>
@@ -175,18 +235,29 @@ export default function App() {
               next step.
             </p>
             <button
-              onClick={() =>
-                profile ? navigate("/settings") : requireAuth("endorser")
-              }
+              onClick={() => {
+                setMobile(false);
+                profile ? navigate("/settings") : requireAuth("endorser");
+              }}
             >
               Become an endorser <ArrowUpRight size={16} />
             </button>
           </div>
-          <NavLink className="settings-link" to="/settings">
+          <NavLink
+            className="settings-link"
+            to="/settings"
+            onClick={() => setMobile(false)}
+          >
             <Settings size={18} />
             Settings & privacy
           </NavLink>
-          <button className="legal-link" onClick={() => setLegal(true)}>
+          <button
+            className="legal-link"
+            onClick={() => {
+              setMobile(false);
+              setLegal(true);
+            }}
+          >
             Guidelines · Privacy · About
           </button>
           <div className="account">
@@ -223,12 +294,15 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <div className="main-shell">
+      <div className="main-shell" inert={compactNavigation && mobile}>
         <header className="topbar">
           <div className="breadcrumb">
             <button
               className="icon-button mobile-toggle"
+              ref={navigationTrigger}
               aria-label="Open navigation"
+              aria-controls="workspace-navigation"
+              aria-expanded={mobile}
               onClick={() => setMobile(true)}
             >
               <Menu />

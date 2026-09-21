@@ -176,10 +176,20 @@ export function MediaPicker({
 function CommunityPdf({ asset }: { asset: MediaAsset }) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null),
     [page, setPage] = useState(1),
+    [readerWidth, setReaderWidth] = useState(0),
     [error, setError] = useState(""),
     [rendering, setRendering] = useState(true);
   const canvas = useRef<HTMLCanvasElement>(null),
     container = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setReaderWidth(Math.round(entry.contentRect.width));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     let alive = true;
     let task: ReturnType<typeof import("pdfjs-dist").getDocument> | undefined;
@@ -223,7 +233,7 @@ function CommunityPdf({ asset }: { asset: MediaAsset }) {
         const base = p.getViewport({ scale: 1 });
         const scale = Math.min(
           1.6,
-          (container.current?.clientWidth || 650) / base.width,
+          (readerWidth || container.current?.clientWidth || 650) / base.width,
         );
         const viewport = p.getViewport({ scale });
         const ratio = Math.min(devicePixelRatio || 1, 2);
@@ -253,7 +263,7 @@ function CommunityPdf({ asset }: { asset: MediaAsset }) {
       alive = false;
       renderTask?.cancel();
     };
-  }, [pdf, page]);
+  }, [pdf, page, readerWidth]);
   return (
     <div className="community-pdf">
       <div className="community-pdf-toolbar">

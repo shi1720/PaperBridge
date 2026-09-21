@@ -45,6 +45,7 @@
   font-size: 25px;
   letter-spacing: -1px;
   white-space: nowrap;
+  min-height: 44px;
 }
 .landing-header .brand-period {
   margin-left: -9px;
@@ -53,6 +54,14 @@
   display: flex;
   gap: 32px;
   font-size: 13px;
+}
+.landing-header nav a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.lp-nav-toggle {
+  display: none;
 }
 .landing a:hover,
 .landing button:not(.button):hover {
@@ -76,7 +85,7 @@
   background: #275645;
 }
 .landing .lp-signin {
-  min-height: 42px;
+  min-height: 44px;
   padding: 10px 16px;
   border-color: #bfcabc;
   background: transparent;
@@ -143,6 +152,7 @@
   line-height: 1.6;
   padding: 0;
   text-align: left;
+  min-height: 44px;
 }
 .landing-hero-note {
   display: flex;
@@ -518,6 +528,11 @@
 .lp-arxiv-handoff > a {
   margin-left: auto;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  min-height: 44px;
 }
 .lp-ai-section {
   max-width: 1360px;
@@ -561,7 +576,7 @@
   color: #4a3b59;
 }
 .lp-provider-note p {
-  font-size: 11px;
+  font-size: 12px;
   color: #65586e;
   max-width: 390px;
   line-height: 1.75;
@@ -612,7 +627,7 @@
   padding-left: 17px;
 }
 .lp-finding-label {
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 1px;
   color: #705980;
 }
@@ -658,7 +673,7 @@
   margin: 7px 0 0;
 }
 .lp-ai-caveat {
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.75;
   color: #6d6373;
   margin: 16px 22px 20px;
@@ -815,7 +830,7 @@
 }
 .lp-faq details {
   border-top: 1px solid #d6dfcc;
-  padding: 18px 0;
+  padding: 10px 0;
 }
 .lp-faq details:last-child {
   border-bottom: 1px solid #d6dfcc;
@@ -829,6 +844,8 @@
   display: flex;
   justify-content: space-between;
   gap: 15px;
+  align-items: center;
+  min-height: 44px;
 }
 .lp-faq summary:after {
   content: "+";
@@ -839,7 +856,7 @@
   content: "−";
 }
 .lp-faq p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.85;
   color: #57674d;
   margin: 13px 22px 0 0;
@@ -881,6 +898,7 @@
 .landing-footer button {
   padding: 0;
   font-size: 11px;
+  min-height: 44px;
 }
 .landing :target {
   scroll-margin-top: 25px;
@@ -985,12 +1003,50 @@
     font-size: 8px;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .landing-header {
-    padding: 21px 24px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    padding: 16px 24px;
+    gap: 8px 12px;
+  }
+  .landing-header .brand {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+  .landing-header .lp-signin {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .landing-header .lp-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    grid-column: 3;
+    grid-row: 1;
+    width: 44px;
+    min-height: 44px;
+    border: 1px solid #bfcabc;
+    border-radius: 6px;
   }
   .landing-header nav {
     display: none;
+  }
+  .landing-header nav.is-open {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: 4px 12px;
+    padding-top: 8px;
+  }
+  .landing-header nav a {
+    padding: 8px 10px;
+    border-radius: 5px;
+    background: #ecf0e3;
+    font-size: 13px;
+    line-height: 1.5;
   }
   .landing-header .brand {
     font-size: 23px;
@@ -1199,25 +1255,30 @@
 }
 @media (max-width: 440px) {
   .landing-header {
-    gap: 12px;
+    padding-inline: 16px;
+    gap: 8px;
   }
   .landing-header .brand {
-    font-size: 22px;
+    font-size: 20px;
+    gap: 7px;
   }
   .landing-header .brand svg {
     width: 23px;
   }
   .landing .lp-signin {
-    padding: 9px 12px;
-    min-height: 39px;
+    padding: 9px 10px;
+    min-height: 44px;
     font-size: 12px;
     gap: 7px;
+  }
+  .landing .lp-signin svg {
+    display: none;
   }
   .landing-hero {
     padding-top: 32px;
   }
   .landing-hero h1 {
-    font-size: 46px;
+    font-size: clamp(38px, 11.8vw, 46px);
     letter-spacing: -2px;
   }
   .landing-intro {
@@ -1333,7 +1394,7 @@
     padding-left: 12px;
   }
   .lp-finding-label {
-    font-size: 7px;
+    font-size: 10px;
     letter-spacing: 0.7px;
   }
   .lp-review-finding h3 {
@@ -1390,7 +1451,7 @@
 .lp-directory-note {
   display: block;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 12px;
   color: #596950;
 }
 
@@ -1513,7 +1574,7 @@
     align-items: start;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .lp-community-features {
     grid-template-columns: 1fr;
   }
@@ -1666,7 +1727,7 @@
   font-size: 10px;
   color: #4d6743;
 }
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .lp-community-preview {
     grid-template-columns: 1fr;
     gap: 26px;

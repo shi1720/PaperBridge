@@ -498,3 +498,102 @@
 .researcher-profile-v2 {
   padding: 0;
 }
+
+/* Only the portrait overlaps the cover; names remain on the readable surface. */
+.researcher-profile-v2 .researcher-profile-identity {
+  margin-top: 0;
+  align-items: flex-start;
+}
+.researcher-profile-v2 .researcher-profile-identity > .avatar {
+  margin-top: -35px;
+}
+.researcher-profile-v2 .researcher-profile-identity > div {
+  min-width: 0;
+  padding-top: 16px;
+}
+.researcher-profile-v2 .researcher-profile-identity h1,
+.researcher-profile-v2 .profile-headline,
+.researcher-profile-v2 .researcher-bio,
+.profile-institution {
+  overflow-wrap: anywhere;
+}
+.profile-institution > svg {
+  flex-shrink: 0;
+}
+.profile-social-layout > *,
+.community-v2 .social-author,
+.community-v2 .social-author > div {
+  min-width: 0;
+}
+.community-v2 .social-author strong,
+.community-v2 .social-author > div > a {
+  overflow-wrap: anywhere;
+}
+.community-v2 .social-post-header > .button {
+  flex-shrink: 0;
+}
+.researcher-profile-v2 .tag {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.profile-activity-heading > svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 1100px), (pointer: coarse) {
+  .community-v2 .category-tabs button,
+  .community-v2 .post-type-choices > button,
+  .community-v2 .community-type-filter select,
+  .community-v2 .social-post-header > .button,
+  .community-v2 .social-post-actions > button {
+    min-height: 44px;
+  }
+  .community-v2 .social-post-actions .icon-button {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+  .community-v2 .social-post-actions {
+    gap: 6px;
+  }
+  .community-v2 .social-post-actions .social-action {
+    font-size: 12px;
+  }
+  .community-v2 .category-tabs,
+  .community-v2 .social-feed-heading {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 600px) {
+  .community-v2 .social-post-header {
+    gap: 8px;
+  }
+  .community-v2 .social-post-header > .button {
+    font-size: 11px;
+  }
+  .community-v2 .social-post-actions {
+    flex-wrap: wrap;
+  }
+  .community-v2 .social-action-spacer {
+    flex-basis: 0;
+  }
+}
+@media (max-width: 360px) {
+  .community-v2 .social-post-actions {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .community-v2 .social-post-actions .social-action {
+    grid-column: span 3;
+    justify-content: center;
+  }
+  .community-v2 .social-post-actions .icon-button {
+    grid-column: span 2;
+    width: 100%;
+  }
+  .community-v2 .social-action-spacer {
+    display: none;
+  }
+}

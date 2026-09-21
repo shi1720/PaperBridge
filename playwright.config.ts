@@ -13,6 +13,14 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
+  projects: [
+    { name: "chromium", use: { browserName: "chromium" } },
+    {
+      name: "webkit",
+      testMatch: "**/*responsive*.spec.ts",
+      use: { browserName: "webkit", hasTouch: true, isMobile: true },
+    },
+  ],
   webServer: [
     {
       command: "npm run dev -- --port 5173",
