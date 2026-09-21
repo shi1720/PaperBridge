@@ -197,7 +197,30 @@ test("two researchers complete a private manuscript and endorsement conversation
   await reviewer
     .getByLabel("Review comment")
     .fill("Please report a stronger baseline and an uncertainty interval.");
-  await reviewer.getByRole("button", { name: "Send", exact: true }).click();
+  // Hold the successful response so edits cannot be lost while the comment
+  // submission is in flight. Other callable requests continue normally.
+  let releaseCommentResponse!: () => void;
+  const commentResponseGate = new Promise<void>((resolve) => {
+    releaseCommentResponse = resolve;
+  });
+  await reviewer.route("**/paperbridgeApi", async (route) => {
+    if (route.request().postDataJSON()?.data?.action !== "request.comment") {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    await commentResponseGate;
+    await route.fulfill({ response });
+  });
+  try {
+    await reviewer.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(reviewer.getByLabel("Review comment")).toBeDisabled();
+    await expect(reviewer.getByLabel("Review comment")).toHaveValue(
+      "Please report a stronger baseline and an uncertainty interval.",
+    );
+  } finally {
+    releaseCommentResponse();
+  }
   await expect(
     reviewer.getByText(
       "Please report a stronger baseline and an uncertainty interval.",

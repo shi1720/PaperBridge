@@ -281,6 +281,7 @@ export function RequestDetail() {
               <form className="message-form" onSubmit={send}>
                 <textarea
                   required
+                  disabled={busy}
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   rows={3}
