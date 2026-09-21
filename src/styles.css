@@ -4691,3 +4691,192 @@ select,
     background-image: none;
   }
 }
+
+/* Workspace navigation stays readable and reachable on short screens. */
+.sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sidebar > .brand,
+.sidebar > .workspace-label,
+.sidebar > nav,
+.sidebar-bottom {
+  flex-shrink: 0;
+}
+.sidebar .brand {
+  margin-bottom: 28px;
+}
+.sidebar nav {
+  gap: 3px;
+}
+.sidebar nav > a {
+  min-height: 44px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+.sidebar-bottom {
+  padding-top: 20px;
+}
+.sidebar-callout {
+  padding: 16px;
+}
+.sidebar-callout p {
+  display: none;
+}
+.sidebar-callout h3 {
+  font-size: 16px;
+  margin-bottom: 13px;
+}
+.sidebar-callout .small-mark {
+  display: none;
+}
+.nav-unread {
+  margin-left: auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 20px;
+  background: #29483c;
+  color: #fff;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.current-page-name {
+  font-size: 13px;
+  color: #54634f;
+}
+.top-profile-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+}
+@media (max-height: 850px) {
+  .sidebar-callout {
+    display: none;
+  }
+  .sidebar-bottom {
+    padding-top: 15px;
+  }
+  .sidebar .brand {
+    margin-bottom: 22px;
+  }
+}
+@media (max-width: 600px) {
+  .breadcrumb {
+    min-width: 0;
+    gap: 12px;
+  }
+  .current-page-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .top-actions {
+    gap: 10px;
+  }
+}
+
+/* Directory controls remain legible instead of shrinking to fit phone widths. */
+.directory .search-field input {
+  font-size: 14px;
+  min-height: 46px;
+}
+.directory .filter-select select {
+  font-size: 12px;
+  min-height: 44px;
+}
+.directory .category-tabs button {
+  font-size: 12px;
+  min-height: 44px;
+  padding: 9px 12px;
+}
+.directory .result-meta,
+.directory .switch-label {
+  font-size: 12px;
+}
+.directory .person-headline,
+.directory .institution {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.directory .availability,
+.directory .paused,
+.directory .connect-button {
+  font-size: 12px;
+}
+.directory .connect-button {
+  min-height: 44px;
+}
+.directory .person-name {
+  min-height: 40px;
+}
+.directory .directory-note {
+  font-size: 12px;
+}
+.directory .tag {
+  font-size: 11px;
+}
+.directory .person-footer {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+@media (max-width: 600px) {
+  .directory .search-line {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .directory .filter-select {
+    width: 100%;
+    max-width: none;
+    padding-left: 12px;
+    gap: 8px;
+  }
+  .directory .filter-select select {
+    width: 100%;
+    font-size: 14px;
+  }
+  .directory .search-field input {
+    font-size: 16px;
+    padding: 12px 8px;
+  }
+  .directory .search-field svg {
+    width: 18px;
+  }
+  .directory .category-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .directory .category-tabs button {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .directory .result-meta {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 12px;
+  }
+  .directory .result-meta > span {
+    max-width: none;
+  }
+  .directory .section-heading {
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .directory .section-heading h2 {
+    font-size: 25px;
+  }
+  .directory .person-name {
+    font-size: 21px;
+  }
+  .directory .person-footer {
+    align-items: center;
+  }
+}

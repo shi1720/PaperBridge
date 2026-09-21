@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -6,17 +6,13 @@ import {
   Send,
   FileText,
   Check,
-  Clock,
   ArrowRight,
-  Inbox,
   ShieldCheck,
   MessageSquare,
   Highlighter,
   GitBranch,
   Upload,
   LockKeyhole,
-  CheckCircle2,
-  Circle,
 } from "lucide-react";
 import { useApp, useData } from "../lib/context";
 import { STATUS, date } from "../lib/types";
@@ -176,7 +172,13 @@ export function Requests({ onAuth }: { onAuth: () => void }) {
     </>
   );
 }
+const discussionDrafts = new Map<string, string>();
 export function RequestDetail() {
+  const { id } = useParams();
+  const { profile } = useApp();
+  return <RequestWorkspace key={`${profile?.id || "guest"}/${id}`} />;
+}
+function RequestWorkspace() {
   const { id } = useParams();
   const { profile, call, toast, refresh } = useApp();
   const {
@@ -184,12 +186,11 @@ export function RequestDetail() {
     error,
     loading,
   } = useData("request.get", { id }, !!profile, 15000);
-  const { data: messages, error: messageError } = useData(
-    "request.messages",
-    { id },
-    !!profile,
-    15000,
-  );
+  const {
+    data: messages,
+    error: messageError,
+    loading: messagesLoading,
+  } = useData("request.messages", { id }, !!profile, 15000);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = ["manuscript", "activity"].includes(searchParams.get("tab") || "")
     ? searchParams.get("tab")!
@@ -202,21 +203,48 @@ export function RequestDetail() {
   );
   const paper = paperQuery.data;
   const [revisionOpen, setRevisionOpen] = useState(false),
-    [viewingVersion, setViewingVersion] = useState<any>(null);
+    [viewingVersion, setViewingVersion] = useState<any>(null),
+    [loadingVersion, setLoadingVersion] = useState(false);
+  const versionSequence = useRef(0);
+  useEffect(
+    () => () => {
+      versionSequence.current++;
+    },
+    [],
+  );
   useEffect(() => {
+    versionSequence.current++;
     setViewingVersion(null);
+    setLoadingVersion(false);
   }, [paper?.version, id]);
   function changeTab(value: string) {
     setSearchParams(value === "discussion" ? {} : { tab: value });
   }
-  const [body, setBody] = useState(""),
+  const discussionKey = `${profile?.id || "guest"}/${id}`;
+  const [body, setBody] = useState(discussionDrafts.get(discussionKey) || ""),
     [busy, setBusy] = useState(false),
+    [sending, setSending] = useState(false),
+    [sendError, setSendError] = useState(""),
+    [statusError, setStatusError] = useState(""),
     [next, setNext] = useState(""),
     [note, setNote] = useState("");
+  useEffect(() => {
+    discussionDrafts.delete(discussionKey);
+    if (body.trim()) discussionDrafts.set(discussionKey, body);
+    if (discussionDrafts.size > 50)
+      discussionDrafts.delete(discussionDrafts.keys().next().value!);
+  }, [discussionKey, body]);
+  useEffect(() => {
+    setStatusError("");
+    setNote("");
+  }, [next]);
   const reviewer = r?.reviewerId === profile?.id;
   const closed = ["declined", "withdrawn", "endorsed"].includes(r?.status);
-  async function status() {
+  async function status(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || !next) return;
     setBusy(true);
+    setStatusError("");
     try {
       await call("request.status", { id, status: next, note });
       setNext("");
@@ -224,23 +252,31 @@ export function RequestDetail() {
       refresh();
       toast("Request updated.");
     } catch (e: any) {
-      toast(e.message);
+      setStatusError(
+        e.message || "The request could not be updated. Please try again.",
+      );
     } finally {
       setBusy(false);
     }
   }
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    if (!body.trim()) return;
-    setBusy(true);
+    if (!body.trim() || sending || closed) return;
+    setSending(true);
+    setSendError("");
     try {
-      await call("request.comment", { id, body });
+      await call("request.comment", { id, body: body.trim() });
       setBody("");
+      discussionDrafts.delete(discussionKey);
       refresh();
+      toast("Comment sent to this request.");
     } catch (e: any) {
-      toast(e.message);
+      setSendError(
+        e.message ||
+          "Your comment could not be sent. Your draft is still here; try again.",
+      );
     } finally {
-      setBusy(false);
+      setSending(false);
     }
   }
   if (loading && !r) return <Loading />;
@@ -383,16 +419,31 @@ export function RequestDetail() {
                   <span className="muted">In-app conversation</span>
                 </div>
                 {messageError && <ErrorBox message={messageError} />}
-                {messages?.length ? (
+                {messagesLoading && !messages ? (
+                  <Loading />
+                ) : messages?.length ? (
                   messages.map((m: any) => (
-                    <article className="message" key={m.id}>
+                    <article
+                      className={`message ${m.authorId === profile?.id ? "workspace-message-own" : ""}`}
+                      key={m.id}
+                    >
                       <Avatar
                         name={m.authorName || "Researcher"}
                         src={m.authorAvatarUrl}
                       />
                       <div>
                         <strong>{m.authorName || "Status update"}</strong>
-                        <time>{date(m.createdAt)}</time>
+                        <time
+                          dateTime={new Date(m.createdAt).toISOString()}
+                          title={new Date(m.createdAt).toLocaleString()}
+                        >
+                          {new Date(m.createdAt).toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </time>
                         <p>{m.body}</p>
                         {m.status && (
                           <span className={"status-badge " + m.status}>
@@ -408,11 +459,18 @@ export function RequestDetail() {
                     your review.
                   </p>
                 )}
+                {closed && (
+                  <p className="workspace-closed-notice">
+                    <LockKeyhole size={16} />
+                    This request is closed. The conversation is available to
+                    read; new comments are disabled.
+                  </p>
+                )}
                 {!closed && (
                   <form className="message-form" onSubmit={send}>
                     <textarea
                       required
-                      disabled={busy}
+                      disabled={sending}
                       value={body}
                       onChange={(e) => setBody(e.target.value)}
                       rows={3}
@@ -420,16 +478,23 @@ export function RequestDetail() {
                       placeholder="Leave thoughtful feedback or ask a question…"
                       aria-label="Review comment"
                     />
+                    {sendError && (
+                      <p className="error-box" role="alert">
+                        {sendError}
+                      </p>
+                    )}
                     <div>
                       <small>
-                        Only the author and selected endorser can see this.
+                        {body
+                          ? "Unsaved draft · kept as you navigate; reload clears it."
+                          : "Only the author and selected endorser can see this."}
                       </small>
                       <button
                         className="button primary"
-                        disabled={busy || !body.trim()}
+                        disabled={sending || !body.trim()}
                       >
                         <Send size={16} />
-                        Send
+                        {sending ? "Sending…" : "Send"}
                       </button>
                     </div>
                   </form>
@@ -467,8 +532,7 @@ export function RequestDetail() {
               </div>
               <p className="workspace-note-boundary">
                 <LockKeyhole size={15} /> Shared notes here belong to this
-                request. Private notes are visible only to their author. Email
-                alerts bring you back to this workspace.
+                request. Private notes are visible only to their author.
               </p>
               {paperQuery.error ? (
                 <ErrorBox message={paperQuery.error} />
@@ -484,8 +548,11 @@ export function RequestDetail() {
                           value={viewingVersion?.version || paper.version}
                           onChange={async (e) => {
                             const version = Number(e.target.value);
+                            const sequence = ++versionSequence.current;
+                            setLoadingVersion(true);
                             if (version === paper.version) {
                               setViewingVersion(null);
+                              setLoadingVersion(false);
                               return;
                             }
                             try {
@@ -493,13 +560,18 @@ export function RequestDetail() {
                                 id: paper.id,
                                 version,
                               });
+                              if (sequence !== versionSequence.current) return;
                               setViewingVersion({
                                 ...paper,
                                 ...previous,
                                 currentVersion: paper.version,
                               });
                             } catch (error: any) {
-                              toast(error.message);
+                              if (sequence === versionSequence.current)
+                                toast(error.message);
+                            } finally {
+                              if (sequence === versionSequence.current)
+                                setLoadingVersion(false);
                             }
                           }}
                         >
@@ -517,6 +589,11 @@ export function RequestDetail() {
                       </small>
                     </div>
                   )}
+                  {loadingVersion && (
+                    <p role="status" className="workspace-version-loading">
+                      Opening manuscript version…
+                    </p>
+                  )}
                   <PdfReader
                     paper={
                       viewingVersion || {
@@ -525,7 +602,7 @@ export function RequestDetail() {
                       }
                     }
                     requestId={id}
-                    readOnly={closed}
+                    readOnly={closed || loadingVersion}
                   />
                 </>
               )}
@@ -599,9 +676,11 @@ export function RequestDetail() {
             <p>
               {r.status === "accepted"
                 ? "An offer to help is the start. The endorser must use arXiv’s official form to complete the endorsement."
-                : reviewer
-                  ? "Read the manuscript and check your current category eligibility on arXiv before offering to endorse."
-                  : "Respond to feedback and keep the conversation focused. A researcher may need time to review your work."}
+                : closed
+                  ? "The conversation and decisions remain in the activity history. Manuscript access for the reviewer ends when a request closes."
+                  : reviewer
+                    ? "Read the manuscript and check your current category eligibility on arXiv before offering to endorse."
+                    : "Respond to feedback and keep the conversation focused. A researcher may need time to review your work."}
             </p>
             {r.endorsementUrl && (
               <External href={r.endorsementUrl}>
@@ -714,27 +793,52 @@ export function RequestDetail() {
                 : "Leave a constructive note explaining the next step."
         }
       >
-        <label className="form">
-          A note for the other researcher
-          <textarea
-            disabled={busy}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={4}
-          />
-        </label>
-        <div className="button-row">
-          <button
-            className="button"
-            disabled={busy}
-            onClick={() => setNext("")}
-          >
-            Cancel
-          </button>
-          <button className="button primary" onClick={status} disabled={busy}>
-            {busy ? "Updating…" : "Confirm update"}
-          </button>
-        </div>
+        <form onSubmit={status}>
+          <label className="form">
+            {next === "changes_requested" || next === "declined"
+              ? "Explain your feedback"
+              : "A note for the other researcher (optional)"}
+            <textarea
+              disabled={busy}
+              value={note}
+              maxLength={5000}
+              required={next === "changes_requested" || next === "declined"}
+              placeholder={
+                next === "changes_requested"
+                  ? "Describe the specific changes that would help the manuscript…"
+                  : "Add context for the next step…"
+              }
+              onChange={(e) => setNote(e.target.value)}
+              rows={4}
+            />
+          </label>
+          {statusError && (
+            <p className="error-box" role="alert">
+              {statusError}
+            </p>
+          )}
+          <div className="button-row">
+            <button
+              type="button"
+              className="button"
+              disabled={busy}
+              onClick={() => setNext("")}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="button primary"
+              disabled={
+                busy ||
+                (["declined", "changes_requested"].includes(next) &&
+                  !note.trim())
+              }
+            >
+              {busy ? "Updating…" : "Confirm update"}
+            </button>
+          </div>
+        </form>
       </Modal>
     </>
   );

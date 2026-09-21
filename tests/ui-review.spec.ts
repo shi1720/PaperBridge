@@ -7,7 +7,7 @@ test("simulated expert review: desktop demo core journeys", async ({
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`${base}/?demo=1`);
+  await page.goto(`${base}/discover?demo=1`);
   await expect(
     page.getByText("INTERACTIVE DEMO", { exact: true }),
   ).toBeVisible();
@@ -50,6 +50,7 @@ test("simulated expert review: desktop demo core journeys", async ({
     fullPage: true,
   });
   await page.getByRole("button", { name: "Delete note", exact: true }).click();
+  await page.getByRole("button", { name: "Delete permanently", exact: true }).click();
   await expect(
     page.getByText("Independent expert demo annotation.", { exact: true }),
   ).toHaveCount(0);
@@ -138,7 +139,7 @@ test("simulated expert review: mobile surfaces and overflow", async ({
 test("follow state survives navigation and cancelled sharing consent is cleared", async ({
   page,
 }) => {
-  await page.goto(`${base}/?demo=1`);
+  await page.goto(`${base}/discover?demo=1`);
   await page
     .getByRole("button", { name: "Follow Maya Chen", exact: true })
     .click();

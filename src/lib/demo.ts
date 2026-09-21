@@ -178,6 +178,7 @@ const notes: RecordData[] = [],
       body: "Your request has moved to review.",
       createdAt: now,
       read: false,
+      link: "/requests/demo-request",
     },
   ],
   chats: RecordData[] = [],
@@ -255,7 +256,11 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
     case "request.comment":
     case "feed.comment":
     case "chat.send": {
-      const row = { ...stamped, body: p.body };
+      const row = {
+        ...stamped,
+        body: p.body,
+        ...(action === "chat.send" ? { chatId: p.id } : {}),
+      };
       (comments[p.id] ||= []).push(row);
       if (action === "feed.comment") {
         const post = feed.find((x) => x.id === p.id);
@@ -266,6 +271,8 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
         if (chat) {
           chat.lastMessage = p.body;
           chat.updatedAt = Date.now();
+          chat.lastMessageAt = row.createdAt;
+          chat.lastMessageAuthorId = row.authorId;
         }
       }
       return row;
@@ -294,6 +301,15 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
       return note;
     }
     case "annotation.save": {
+      const existing = p.id
+        ? notes.find((note) => note.id === p.id)
+        : undefined;
+      if (existing) {
+        if (existing.authorId !== demoProfile.id)
+          throw Error("You can edit only your notes.");
+        Object.assign(existing, p, { updatedAt: Date.now() });
+        return existing;
+      }
       const row = { ...stamped, ...p };
       notes.push(row);
       return row;
@@ -304,13 +320,17 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
         1,
       );
       return { ok: true };
-    case "feed.list":
-      return feed.filter(
+    case "feed.list": {
+      const posts = feed.filter(
         (post) =>
           (!p.following || following.has(post.authorId)) &&
           (!p.saved || post.saved) &&
           (!p.authorId || post.authorId === p.authorId),
       );
+      return p.includePageInfo
+        ? { posts, nextCursor: null, hasMore: false }
+        : posts;
+    }
     case "feed.get":
       return feed.find((post) => post.id === p.id);
     case "feed.post": {
@@ -354,7 +374,21 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
     case "follow.list":
       return [...following];
     case "chat.list":
-      return [...chats];
+      return [...chats].sort(
+        (a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt),
+      );
+    case "chat.read": {
+      const chat = chats.find((x) => x.id === p.id);
+      if (chat) {
+        chat.unreadCount = 0;
+        chat.lastReadAt = p.through || Date.now();
+      }
+      return {
+        updated: true,
+        unreadCount: 0,
+        lastReadAt: p.through || Date.now(),
+      };
+    }
     case "chat.open": {
       let row = chats.find((x) => x.otherId === p.userId);
       if (!row) {
@@ -370,7 +404,9 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
     case "notifications.list":
       return [...notifications];
     case "notifications.read":
-      notifications.forEach((x) => (x.read = true));
+      notifications.forEach((x) => {
+        if (!p.id || x.id === p.id) x.read = true;
+      });
       return { ok: true };
     case "leaderboard.list":
       return demoPeople

@@ -18,7 +18,7 @@ import {
   RotateCcw,
   MessageSquare,
   Send,
-  X,
+  Pencil,
   FileText,
   ChevronLeft,
   ChevronRight,
@@ -33,6 +33,12 @@ import { useApp, useData } from "../lib/context";
 import { Avatar } from "./ui";
 import "./pdf-reader.css";
 import { analyzePdfPage, type PdfAnalysis } from "../lib/pdf-analysis";
+import {
+  readerDraftKey,
+  readReaderDraft,
+  rememberReaderDraft,
+  type PageDraft,
+} from "../lib/reader-drafts";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -102,7 +108,23 @@ const colors: Record<string, string> = {
 const message = (e: unknown) =>
   e instanceof Error ? e.message : "Something went wrong. Please try again.";
 
-export function PdfReader({
+export function PdfReader(props: {
+  paper: any;
+  requestId?: string;
+  readOnly?: boolean;
+}) {
+  const { user, profile, demo } = useApp();
+  const draftKey = readerDraftKey(
+    (demo ? profile?.id : user?.uid || profile?.id) || "guest",
+    props.paper.id,
+    props.paper.version || 1,
+    props.requestId,
+  );
+  return <ReaderWorkspace key={draftKey} {...props} draftKey={draftKey} />;
+}
+
+function ReaderWorkspace({
+  draftKey,
   paper,
   requestId,
   readOnly: locked = false,
@@ -110,6 +132,7 @@ export function PdfReader({
   paper: any;
   requestId?: string;
   readOnly?: boolean;
+  draftKey: string;
 }) {
   const { call, profile, user, demo, refresh, toast } = useApp();
   const annotations = useData(
@@ -118,8 +141,10 @@ export function PdfReader({
     true,
     15000,
   );
+  const restored = useRef(readReaderDraft(draftKey)).current;
+  const restoredPage = restored?.page || 1;
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(restoredPage);
   const [zoom, setZoom] = useState(1);
   const [loading, setLoading] = useState(false);
   const [rendering, setRendering] = useState(false);
@@ -131,12 +156,17 @@ export function PdfReader({
     url: string;
     version: number;
   } | null>(null);
-  const currentDocument = useRef("");
-  const [quote, setQuote] = useState("");
-  const [rects, setRects] = useState<Rect[]>([]);
-  const [body, setBody] = useState("");
-  const [visibility, setVisibility] = useState<"private" | "shared">("private");
-  const [color, setColor] = useState("yellow");
+  const [quote, setQuote] = useState(
+    restored?.pages[restoredPage]?.quote || "",
+  );
+  const [rects, setRects] = useState<Rect[]>(
+    restored?.pages[restoredPage]?.rects || [],
+  );
+  const [body, setBody] = useState(restored?.pages[restoredPage]?.body || "");
+  const [visibility, setVisibility] = useState<"private" | "shared">(
+    restored?.visibility || "private",
+  );
+  const [color, setColor] = useState(restored?.color || "yellow");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState("");
   const [dimensions, setDimensions] = useState({ width: 612, height: 792 });
@@ -153,7 +183,7 @@ export function PdfReader({
     [focusReading, setFocusReading] = useState(false),
     [fullscreen, setFullscreen] = useState(false),
     [fitWidth, setFitWidth] = useState(true),
-    [pageInput, setPageInput] = useState("1"),
+    [pageInput, setPageInput] = useState(String(restoredPage)),
     [noteSearch, setNoteSearch] = useState(""),
     [noteFilter, setNoteFilter] = useState("all"),
     [searchQuery, setSearchQuery] = useState(""),
@@ -166,9 +196,32 @@ export function PdfReader({
   const readerRef = useRef<HTMLElement>(null),
     scrollRef = useRef<HTMLDivElement>(null),
     searchSequence = useRef(0),
-    draftPages = useRef<
-      Record<number, { body: string; quote: string; rects: Rect[] }>
-    >({});
+    draftPages = useRef<Record<number, PageDraft>>(restored?.pages || {});
+  const [anchor, setAnchor] = useState<{
+    noteId: string;
+    page: number;
+    y: number;
+  } | null>(null);
+
+  useEffect(() => {
+    rememberReaderDraft(draftKey, {
+      page,
+      pages: { ...draftPages.current, [page]: { body, quote, rects } },
+      visibility,
+      color,
+    });
+  }, [draftKey, page, body, quote, rects, visibility, color]);
+
+  useEffect(() => {
+    if (!anchor || rendering || anchor.page !== page) return;
+    scrollRef.current?.scrollTo({
+      top: Math.max(
+        0,
+        anchor.y * dimensions.height - scrollRef.current.clientHeight * 0.25,
+      ),
+      behavior: "smooth",
+    });
+  }, [anchor, rendering, page, dimensions.height]);
 
   const notes: any[] = (
     Array.isArray(annotations.data) ? annotations.data : []
@@ -177,6 +230,7 @@ export function PdfReader({
   const filteredNotes = notes.filter(
     (n) =>
       (noteFilter === "all" ||
+        (noteFilter === "page" && n.page === page) ||
         (noteFilter === "open" && !n.resolved) ||
         (noteFilter === "resolved" && n.resolved) ||
         noteFilter === n.visibility) &&
@@ -186,7 +240,14 @@ export function PdfReader({
           .includes(noteSearch.toLowerCase())),
   );
   function goToPage(next: number) {
-    const target = Math.max(1, Math.min(pdf?.numPages || 1, next));
+    if (saving) return;
+    const target = Math.max(
+      1,
+      Math.min(
+        pdf?.numPages || 1,
+        Number.isFinite(next) ? Math.trunc(next) : 1,
+      ),
+    );
     setPageInput(String(target));
     if (target === page) return;
     draftPages.current[page] = { body, quote, rects };
@@ -274,18 +335,6 @@ export function PdfReader({
     return () => document.removeEventListener("fullscreenchange", change);
   }, []);
   useEffect(() => {
-    searchSequence.current++;
-    setSearchHits([]);
-    setActiveSearch("");
-    setSearching(false);
-    draftPages.current = {};
-    setPage(1);
-    setPageInput("1");
-    setBody("");
-    setQuote("");
-    setRects([]);
-  }, [paper.id, paper.version, requestId]);
-  useEffect(() => {
     if (!pdf || !fitWidth || !scrollRef.current) return;
     let active = true;
     const host = scrollRef.current;
@@ -331,13 +380,6 @@ export function PdfReader({
   }, []);
   useEffect(() => {
     let active = true;
-    if (currentDocument.current !== paper.id) {
-      setPage(1);
-      setQuote("");
-      setRects([]);
-      setBody("");
-      currentDocument.current = paper.id;
-    }
     setPdf(null);
     setError("");
     if (!paper.downloadUrl) {
@@ -467,6 +509,8 @@ export function PdfReader({
       .filter((r) => r.width > 0 && r.height > 0)
       .slice(0, 50);
     setQuote(text);
+    setFocusReading(false);
+    setAnchor(null);
     setRects(demoFallback ? [] : selectedRects);
     setNoteError("");
   }
@@ -829,7 +873,7 @@ export function PdfReader({
                 <Highlighter size={14} />{" "}
                 {readOnly
                   ? "Read-only view · existing notes remain available."
-                  : "Select a passage to anchor your feedback. Page drafts stay with their page."}
+                  : "Select a passage to highlight it, or add a page note. Your drafts stay here as you move around this workspace."}
               </p>
               {rendering && (
                 <p className="pb-reader-status" role="status">
@@ -879,6 +923,11 @@ export function PdfReader({
                               (r: Rect, index: number) => (
                                 <span
                                   key={`${n.id}-${index}`}
+                                  className={
+                                    anchor?.noteId === n.id
+                                      ? "pb-highlight-active"
+                                      : undefined
+                                  }
                                   style={highlightStyle(r, n.color)}
                                 />
                               ),
@@ -909,7 +958,7 @@ export function PdfReader({
             {historical
               ? "Previous version · switch to the current manuscript to contribute."
               : locked
-                ? "This request is closed. Notes and replies are available to read."
+                ? "This request is closed. Available notes and replies are read-only."
                 : requestId
                   ? "Choose private notes for yourself or share feedback with the other researcher in this request."
                   : "Private notes are only for you. Shared notes are visible to this paper’s request participants."}
@@ -930,6 +979,7 @@ export function PdfReader({
                   onClick={() => {
                     setQuote("");
                     setRects([]);
+                    window.getSelection()?.removeAllRanges();
                   }}
                 >
                   Clear selection
@@ -946,6 +996,11 @@ export function PdfReader({
               disabled={saving || readOnly}
               onChange={(e) => setBody(e.target.value)}
             />
+            {(body || quote) && (
+              <small className="pb-draft-status">
+                Unsaved draft · kept as you navigate; reload clears it
+              </small>
+            )}
             <div className="pb-note-options">
               <label>
                 Visibility
@@ -1001,7 +1056,7 @@ export function PdfReader({
             </button>
           </form>
           <div className="pb-notes-divider">
-            <span>YOUR REVIEW NOTES</span>
+            <span>REVIEW NOTES</span>
             <button
               type="button"
               className="text-link"
@@ -1028,6 +1083,7 @@ export function PdfReader({
               onChange={(e) => setNoteFilter(e.target.value)}
             >
               <option value="all">All notes</option>
+              <option value="page">This page</option>
               <option value="open">Open notes</option>
               <option value="resolved">Resolved notes</option>
               <option value="private">Private notes</option>
@@ -1068,10 +1124,24 @@ export function PdfReader({
                 key={note.id}
                 note={note}
                 currentPage={page}
-                canJump={!!pdf && note.page <= pdf.numPages}
-                onJump={() => goToPage(note.page)}
+                canJump={!!pdf && !saving && note.page <= pdf.numPages}
+                onJump={() => {
+                  goToPage(note.page);
+                  setAnchor({
+                    noteId: note.id,
+                    page: note.page,
+                    y: note.rects?.[0]?.y || 0,
+                  });
+                  pageRef.current?.scrollIntoView({
+                    block: "nearest",
+                    behavior: "smooth",
+                  });
+                }}
                 readOnly={readOnly}
-                own={note.authorId === (user?.uid || profile?.id) || demo}
+                own={
+                  note.authorId ===
+                  (demo ? profile?.id : user?.uid || profile?.id)
+                }
                 onDelete={() => void deleteNote(note.id)}
                 deleting={deleting === note.id}
               />
@@ -1192,10 +1262,39 @@ function AnnotationCard({
   deleting: boolean;
 }) {
   const { call, refresh } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [editBody, setEditBody] = useState(note.body || "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [reply, setReply] = useState(""),
     [expanded, setExpanded] = useState(false),
     [busy, setBusy] = useState(""),
     [error, setError] = useState("");
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || readOnly || !own || (!editBody.trim() && !note.quote)) return;
+    setBusy("edit");
+    setError("");
+    try {
+      await call("annotation.save", {
+        id: note.id,
+        paperId: note.paperId,
+        paperVersion: note.paperVersion || 1,
+        requestId: note.requestId || null,
+        page: note.page,
+        quote: note.quote || "",
+        body: editBody.trim(),
+        color: note.color,
+        visibility: note.visibility,
+        rects: note.rects || [],
+      });
+      setEditing(false);
+      refresh();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy("");
+    }
+  }
   async function mutate(action: "reply" | "resolve") {
     if (busy || readOnly) return;
     setBusy(action);
@@ -1257,7 +1356,7 @@ function AnnotationCard({
             className="icon-button"
             aria-label="Delete note"
             disabled={readOnly || deleting || !!busy}
-            onClick={onDelete}
+            onClick={() => setConfirmDelete(true)}
           >
             <Trash2 size={13} />
           </button>
@@ -1272,7 +1371,61 @@ function AnnotationCard({
         {note.createdAt && <time>{dateLabel(note.createdAt)}</time>}
       </div>
       {note.quote && <blockquote>{note.quote}</blockquote>}
-      {note.body && <p>{note.body}</p>}
+      {editing ? (
+        <form className="pb-note-edit" onSubmit={saveEdit}>
+          <label htmlFor={`edit-note-${note.id}`}>Edit your note</label>
+          <textarea
+            id={`edit-note-${note.id}`}
+            value={editBody}
+            rows={4}
+            maxLength={10000}
+            disabled={!!busy}
+            onChange={(e) => setEditBody(e.target.value)}
+            autoFocus
+          />
+          <div className="button-row">
+            <button
+              type="button"
+              className="button compact"
+              disabled={!!busy}
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="button primary compact"
+              disabled={!!busy || (!editBody.trim() && !note.quote)}
+            >
+              {busy === "edit" ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </form>
+      ) : note.body ? (
+        <p>{note.body}</p>
+      ) : null}
+      {confirmDelete && (
+        <div className="pb-note-delete" role="alert">
+          <p>Delete this note and its replies? This cannot be undone.</p>
+          <div className="button-row">
+            <button
+              type="button"
+              className="button compact"
+              disabled={deleting}
+              onClick={() => setConfirmDelete(false)}
+            >
+              Keep note
+            </button>
+            <button
+              type="button"
+              className="button compact danger"
+              disabled={deleting || !!busy}
+              onClick={onDelete}
+            >
+              {deleting ? "Deleting…" : "Delete permanently"}
+            </button>
+          </div>
+        </div>
+      )}
       {note.resolved && (
         <div className="pb-resolved-label">
           <Check size={13} />
@@ -1280,6 +1433,20 @@ function AnnotationCard({
         </div>
       )}
       <div className="pb-note-actions">
+        {own && !readOnly && !editing && (
+          <button
+            type="button"
+            className="text-link"
+            disabled={!!busy || deleting}
+            onClick={() => {
+              setEditBody(note.body || "");
+              setEditing(true);
+            }}
+          >
+            <Pencil size={13} />
+            Edit
+          </button>
+        )}
         <button
           type="button"
           className="text-link"

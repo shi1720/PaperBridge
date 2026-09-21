@@ -270,3 +270,92 @@
     min-height: 44px;
   }
 }
+
+.workspace-layout .message {
+  padding: 20px 0;
+}
+.workspace-layout .message > div {
+  min-width: 0;
+  flex: 1;
+}
+.workspace-layout .message strong {
+  line-height: 1.6;
+}
+.workspace-layout .message time {
+  display: block;
+  margin: 3px 0 9px;
+  color: #64735c;
+  font-size: 12px;
+}
+.workspace-layout .message p {
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.workspace-message-own > .avatar {
+  box-shadow: 0 0 0 3px #e8efdf;
+}
+.workspace-layout .message-form textarea {
+  border-radius: 10px;
+  line-height: 1.7;
+  min-height: 118px;
+}
+.workspace-closed-notice,
+.workspace-version-loading {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f3f6ef;
+  color: #53674a;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.workspace-closed-notice > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.workspace-document-heading > div,
+.workspace-stage-track li > div {
+  min-width: 0;
+}
+.workspace-stage-track small {
+  font-size: 11px;
+}
+.workspace-navigation > span {
+  font-size: 11px;
+}
+.workspace-document-heading .button-row {
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  .workspace-current-stage {
+    padding: 18px;
+  }
+  .workspace-stage-track {
+    gap: 22px 14px;
+  }
+  .workspace-stage-track strong,
+  .workspace-navigation button {
+    font-size: 12px;
+  }
+  .workspace-stage-track small {
+    font-size: 11px;
+  }
+  .workspace-navigation button {
+    padding: 13px 8px;
+    min-height: 48px;
+  }
+  .workspace-layout .message-form textarea {
+    font-size: 16px;
+  }
+  .workspace-layout .message-form > div {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .workspace-layout .message-form > div > small {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.7;
+  }
+}

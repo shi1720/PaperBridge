@@ -133,46 +133,86 @@ export function useData(
   enabled = true,
   interval = 0,
 ) {
-  const { call, revision } = useApp();
-  const [data, setData] = useState<any>(null),
-    [error, setError] = useState(""),
-    [loading, setLoading] = useState(true);
+  const { call, revision, profile, demo, user } = useApp();
   const key = JSON.stringify(payload);
+  const scope = JSON.stringify([
+    action,
+    key,
+    demo ? "demo" : user?.uid || profile?.id || "anonymous",
+    enabled,
+  ]);
+  const [state, setState] = useState<{
+    scope: string;
+    data: any;
+    error: string;
+    loading: boolean;
+  }>({
+    scope: "",
+    data: null,
+    error: "",
+    loading: enabled,
+  });
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (!enabled) {
-      setLoading(false);
-      setData(null);
+      setState({ scope, data: null, error: "", loading: false });
       return;
     }
-    setLoading(true);
-    setError("");
+    // Refresh in place, but never expose a previous record/account's data or error.
+    setState((previous) =>
+      previous.scope === scope
+        ? {
+            ...previous,
+            error: "",
+            loading:
+              previous.loading || (!!previous.error && previous.data === null),
+          }
+        : { scope, data: null, error: "", loading: true },
+    );
+    let fetching = false;
     async function fetchData() {
+      if (fetching || !active) return;
+      fetching = true;
+      clearTimeout(timer);
       try {
         const result = await call(action, JSON.parse(key));
-        if (active) {
-          setData(result);
-          setError("");
-        }
+        if (active)
+          setState({ scope, data: result, error: "", loading: false });
       } catch (e: any) {
-        if (active) setError(e.message || "Unable to load. Please try again.");
+        if (active)
+          setState((previous) => ({
+            scope,
+            data: previous.scope === scope ? previous.data : null,
+            error: e.message || "Unable to load. Please try again.",
+            loading: false,
+          }));
       } finally {
-        if (active) {
-          setLoading(false);
-          if (interval)
-            timer = setTimeout(() => {
-              if (document.visibilityState === "visible") void fetchData();
-              else timer = setTimeout(fetchData, interval);
-            }, interval);
-        }
+        fetching = false;
+        if (active && interval)
+          timer = setTimeout(() => {
+            if (document.visibilityState === "visible") void fetchData();
+          }, interval);
       }
+    }
+    function resume() {
+      if (document.visibilityState === "visible") void fetchData();
+    }
+    if (interval) {
+      window.addEventListener("focus", resume);
+      window.addEventListener("online", resume);
+      document.addEventListener("visibilitychange", resume);
     }
     void fetchData();
     return () => {
       active = false;
       clearTimeout(timer);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
     };
-  }, [action, key, call, revision, enabled, interval]);
-  return { data, error, loading };
+  }, [action, key, call, revision, enabled, interval, scope]);
+  return state.scope === scope && enabled
+    ? { data: state.data, error: state.error, loading: state.loading }
+    : { data: null, error: "", loading: enabled };
 }

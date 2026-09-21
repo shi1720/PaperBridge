@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import {
+  Link,
+  useParams,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import {
   Plus,
   Upload,
@@ -20,7 +25,21 @@ import { PdfReader, extractPdfManuscript } from "./PdfReader";
 import type { PdfAnalysis } from "../lib/pdf-analysis";
 export function Papers({ onAuth }: { onAuth: () => void }) {
   const { profile } = useApp();
+  const [params, setParams] = useSearchParams();
   const [upload, setUpload] = useState(false);
+  useEffect(() => {
+    if (profile && params.get("upload") === "1") {
+      setUpload(true);
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.delete("upload");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [profile, params, setParams]);
   const { data, error, loading } = useData("paper.list", {}, !!profile);
   return (
     <>
@@ -315,9 +334,18 @@ export function PaperDetail() {
     [busy, setBusy] = useState(false),
     [revisionOpen, setRevisionOpen] = useState(false),
     [viewingVersion, setViewingVersion] = useState<any>(null);
+  const versionSequence = useRef(0);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [versionError, setVersionError] = useState("");
   useEffect(() => {
+    versionSequence.current++;
     setViewingVersion(null);
-  }, [paper?.version, id]);
+    setVersionLoading(false);
+    setVersionError("");
+    return () => {
+      versionSequence.current++;
+    };
+  }, [paper?.version, id, profile?.id]);
   if (loading && !paper) return <Loading />;
   if (error) return <ErrorBox message={error} />;
   if (!paper)
@@ -377,23 +405,35 @@ export function PaperDetail() {
             <select
               value={viewingVersion?.version || paper.version}
               onChange={async (e) => {
+                const sequence = ++versionSequence.current;
                 const version = Number(e.target.value);
+                setVersionError("");
                 if (version === paper.version) {
                   setViewingVersion(null);
+                  setVersionLoading(false);
                   return;
                 }
+                setVersionLoading(true);
                 try {
                   const previous = await call("paper.version.get", {
                     id,
                     version,
                   });
-                  setViewingVersion({
-                    ...paper,
-                    ...previous,
-                    currentVersion: paper.version,
-                  });
+                  if (sequence === versionSequence.current)
+                    setViewingVersion({
+                      ...paper,
+                      ...previous,
+                      currentVersion: paper.version,
+                    });
                 } catch (e: any) {
-                  toast(e.message);
+                  if (sequence === versionSequence.current)
+                    setVersionError(
+                      e.message ||
+                        "Could not load this revision. Please try again.",
+                    );
+                } finally {
+                  if (sequence === versionSequence.current)
+                    setVersionLoading(false);
                 }
               }}
             >
@@ -411,11 +451,16 @@ export function PaperDetail() {
           </p>
         </div>
       )}
-      <PdfReader
-        paper={
-          viewingVersion || { ...paper, currentVersion: paper.version || 1 }
-        }
-      />
+      {versionError && <ErrorBox message={versionError} />}
+      {versionLoading ? (
+        <Loading />
+      ) : (
+        <PdfReader
+          paper={
+            viewingVersion || { ...paper, currentVersion: paper.version || 1 }
+          }
+        />
+      )}
       <UploadModal
         open={revisionOpen}
         onClose={() => setRevisionOpen(false)}

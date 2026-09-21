@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   ArrowRight,
   Check,
@@ -83,7 +88,7 @@ export function ResearcherProfile({ onAuth }: { onAuth: () => void }) {
         </Link>
       </>
     );
-  if (loading || !person) return <Loading />;
+  if (!person || (loading && person.id !== id)) return <Loading />;
   const own = person.id === profile.id;
   return (
     <>
@@ -149,6 +154,24 @@ export function ResearcherProfile({ onAuth }: { onAuth: () => void }) {
                 </>
               )}
             </div>
+            {own && follows.data && (
+              <div className="profile-network-summary">
+                <Link to="/researchers?network=following">
+                  <strong>
+                    {Array.isArray(follows.data)
+                      ? follows.data.length
+                      : follows.data.following?.length || 0}
+                  </strong>{" "}
+                  following <ArrowRight size={13} />
+                </Link>
+                {!Array.isArray(follows.data) && (
+                  <span>
+                    <strong>{follows.data.followers?.length || 0}</strong>{" "}
+                    followers
+                  </span>
+                )}
+              </div>
+            )}
             {actionError && <ErrorBox message={actionError} />}{" "}
             {follows.error && !own && <ErrorBox message={follows.error} />}
             <h3>ABOUT THE RESEARCH</h3>
@@ -197,13 +220,21 @@ export function ResearcherProfile({ onAuth }: { onAuth: () => void }) {
               </p>
             )}
             {person.role === "endorser" && (
-              <p className="notice">
+              <div className="notice">
                 {person.acceptingRequests
                   ? "Accepting endorsement requests."
                   : "Endorsement requests are currently paused."}{" "}
                 Eligibility is self-attested; confirm category-specific
                 privileges on arXiv.
-              </p>
+                {!own && person.acceptingRequests && (
+                  <Link
+                    className="text-link profile-endorsement-link"
+                    to="/discover"
+                  >
+                    Explore endorsement support <ArrowRight size={14} />
+                  </Link>
+                )}
+              </div>
             )}
           </div>
         </section>
@@ -285,6 +316,14 @@ export function ResearcherProfile({ onAuth }: { onAuth: () => void }) {
 
 export function Researchers({ onAuth }: { onAuth: () => void }) {
   const { profile } = useApp();
+  const [params, setParams] = useSearchParams();
+  const network = params.get("network") === "following" ? "following" : "all";
+  const follows = useData("follow.list", {}, !!profile);
+  const following = new Set<string>(
+    Array.isArray(follows.data)
+      ? follows.data
+      : (follows.data?.following || []).map((item: any) => item.followingId),
+  );
   const [search, setSearch] = useState(""),
     [query, setQuery] = useState(""),
     [category, setCategory] = useState("");
@@ -296,6 +335,9 @@ export function Researchers({ onAuth }: { onAuth: () => void }) {
     "directory.list",
     { scope: "researchers", search: query, category },
     !!profile,
+  );
+  const people = (Array.isArray(data) ? data : []).filter(
+    (person: any) => network === "all" || following.has(person.id),
   );
   return (
     <>
@@ -324,6 +366,26 @@ export function Researchers({ onAuth }: { onAuth: () => void }) {
         </Empty>
       ) : (
         <>
+          <div
+            className="category-tabs researcher-network-tabs"
+            role="group"
+            aria-label="Researcher network"
+          >
+            <button
+              className={network === "all" ? "active" : ""}
+              aria-pressed={network === "all"}
+              onClick={() => setParams({})}
+            >
+              Discover people
+            </button>
+            <button
+              className={network === "following" ? "active" : ""}
+              aria-pressed={network === "following"}
+              onClick={() => setParams({ network: "following" })}
+            >
+              Following <span>{following.size}</span>
+            </button>
+          </div>
           <div className="search-line">
             <label className="search-field">
               <Search size={18} />
@@ -356,13 +418,13 @@ export function Researchers({ onAuth }: { onAuth: () => void }) {
               Find potential endorsers accepting requests.
             </Link>
           </p>
-          {loading ? (
+          {loading || (network === "following" && follows.loading) ? (
             <Loading />
-          ) : error ? (
-            <ErrorBox message={error} />
-          ) : data?.length ? (
+          ) : error || (network === "following" && follows.error) ? (
+            <ErrorBox message={error || follows.error} />
+          ) : people.length ? (
             <div className="people-grid researchers-v2">
-              {data.map((p: any) => (
+              {people.map((p: any) => (
                 <article className="person-card" key={p.id}>
                   <Avatar
                     src={p.avatarUrl}
@@ -391,7 +453,7 @@ export function Researchers({ onAuth }: { onAuth: () => void }) {
                       "Explore this researcher’s interests and background."}
                   </p>
                   <div className="tags">
-                    {p.categories.map((c: string) => (
+                    {(p.categories || []).map((c: string) => (
                       <Tag key={c}>{c}</Tag>
                     ))}
                   </div>
@@ -409,17 +471,27 @@ export function Researchers({ onAuth }: { onAuth: () => void }) {
               title={
                 search || category
                   ? "No matching public profiles"
-                  : "Help this research community grow"
+                  : network === "following"
+                    ? "Your research circle starts here"
+                    : "Help this research community grow"
               }
               action={
-                <Link className="button" to="/settings">
-                  Build your research profile <ArrowRight size={16} />
-                </Link>
+                network === "following" ? (
+                  <button className="button" onClick={() => setParams({})}>
+                    Discover researchers <ArrowRight size={16} />
+                  </button>
+                ) : (
+                  <Link className="button" to="/settings">
+                    Build your research profile <ArrowRight size={16} />
+                  </Link>
+                )
               }
             >
-              {search || category
-                ? "Try another category or a shorter name. Only profiles members choose to publish appear here."
-                : "Introduce your research and choose whether to make your profile visible to other members."}
+              {network === "following"
+                ? "Follow researchers from their profiles or community posts. Matching public profiles from your connections appear here."
+                : search || category
+                  ? "Try another category or a shorter name. Only profiles members choose to publish appear here."
+                  : "Introduce your research and choose whether to make your profile visible to other members."}
             </Empty>
           )}
         </>

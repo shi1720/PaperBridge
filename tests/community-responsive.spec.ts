@@ -34,24 +34,30 @@ async function prepareMedia(page: Page) {
   // Isolated browser fixture: production and the source demo data stay untouched.
   await page.route("**/src/lib/demo.ts*", async (route) => {
     const response = await route.fetch();
-    const body = (await response.text()).replace(
-      'case "profile.get":',
-      `case "media.get": return ${JSON.stringify(assets)}.find(x => x.id === p.id); case "profile.get":`,
-    );
+    const fixture = {
+      id: "responsive-post",
+      authorId: "demo-author",
+      authorName: "Alex Morgan",
+      body: "A local responsive attachment fixture.",
+      postType: "paper",
+      createdAt: Date.now(),
+      likes: 0,
+      commentCount: 0,
+      attachments: assets,
+    };
+    const body = (await response.text())
+      .replace(
+        'case "profile.get":',
+        `case "media.get": return ${JSON.stringify(assets)}.find(x => x.id === p.id); case "profile.get":`,
+      )
+      .replace(
+        'case "feed.list": {',
+        `case "feed.list": { if (!feed.some(post => post.id === "responsive-post")) feed.unshift(${JSON.stringify(fixture)});`,
+      );
     await route.fulfill({ response, body });
   });
   await page.goto(`${base}/community?demo=1`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await page.evaluate(async (attachments) => {
-    const path = "/src/lib/demo.ts";
-    const { demoCall } = await import(path);
-    await demoCall("feed.post", {
-      body: "A local responsive attachment fixture.",
-      postType: "paper",
-      attachments,
-    });
-  }, assets);
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.locator(".post-pdf-card").first()).toBeVisible();
 }
 

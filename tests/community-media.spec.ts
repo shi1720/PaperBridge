@@ -153,7 +153,10 @@ test("researchers share images and PDFs, save a discussion, edit posts, and keep
       }
       const response = await route.fetch();
       const json = await response.json();
-      for (const entry of json.result?.data || []) {
+      const payload = json.result?.data;
+      for (const entry of Array.isArray(payload)
+        ? payload
+        : payload?.posts || []) {
         if (entry.body !== body) continue;
         for (const asset of entry.attachments || [])
           if (asset.kind === "image")
@@ -172,7 +175,7 @@ test("researchers share images and PDFs, save a discussion, edit posts, and keep
       )
       .toBeGreaterThan(0);
     expect(renewals).toBeGreaterThan(0);
-    await reader.unroute("**/paperbridgeApi");
+    await reader.unrouteAll({ behavior: "wait" });
     await post.getByRole("button", { name: "Save post", exact: true }).click();
     await expect(
       post.getByRole("button", { name: "Unsave post", exact: true }),

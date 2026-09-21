@@ -283,6 +283,29 @@ test("two researchers complete a private manuscript and endorsement conversation
     .getByRole("button", { name: "Resolve", exact: true })
     .click();
   await expect(authorNote).toContainText("Resolved");
+  await authorNote.getByRole("button", { name: "Edit", exact: true }).click();
+  await author
+    .getByLabel("Edit your note", { exact: true })
+    .fill(
+      "Please clarify the scope of the benchmark claim. Include the uncertainty interval.",
+    );
+  await author
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(authorNote).toContainText("Include the uncertainty interval.");
+  await expect(authorNote).toContainText(
+    "Agreed. Limit this to the two evaluated benchmarks.",
+  );
+  await expect(authorNote).toContainText("Resolved");
+  await reviewer.reload();
+  await expect(
+    reviewer
+      .locator(".pb-note")
+      .filter({ hasText: "Include the uncertainty interval." }),
+  ).toBeVisible();
+  await expect(
+    reviewer.getByRole("button", { name: "Edit", exact: true }),
+  ).toHaveCount(0);
   await author
     .getByRole("button", { name: "Upload revision", exact: true })
     .click();
@@ -461,7 +484,7 @@ test("researcher social journey connects public profiles, follows, discussions, 
     await a.reload();
     await a.getByRole("button", { name: "Notifications", exact: true }).click();
     await a
-      .getByRole("dialog")
+      .getByLabel("Activity inbox")
       .getByRole("link", { name: "Open update", exact: true })
       .first()
       .click();
@@ -487,7 +510,7 @@ test("researcher social journey connects public profiles, follows, discussions, 
     await a.reload();
     await a.getByRole("button", { name: "Notifications", exact: true }).click();
     await a
-      .getByRole("dialog")
+      .getByLabel("Activity inbox")
       .getByRole("link", { name: "Open update", exact: true })
       .first()
       .click();

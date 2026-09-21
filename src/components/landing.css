@@ -1789,3 +1789,114 @@
     font-size: 12px;
   }
 }
+
+.lp-start-section {
+  max-width: 1360px;
+  margin: auto;
+  padding: 65px 40px 12px;
+}
+.lp-start-intro {
+  max-width: 660px;
+  margin-bottom: 28px;
+}
+.lp-start-intro .landing-eyebrow {
+  margin-bottom: 14px;
+}
+.lp-start-intro h2 {
+  font-size: clamp(28px, 3vw, 38px);
+  margin-bottom: 15px;
+}
+.lp-start-intro > p:last-child {
+  font-size: 15px;
+  color: var(--lp-muted);
+}
+.lp-start-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.lp-start-grid article {
+  padding: 27px;
+  border: 1px solid #d8e0d2;
+  border-radius: 10px;
+  background: #f0f3e7;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.lp-start-grid article:nth-child(2) {
+  background: #e9efdf;
+}
+.lp-start-grid article:nth-child(3) {
+  background: #edf0e9;
+}
+.lp-start-icon {
+  display: grid;
+  place-items: center;
+  width: 45px;
+  height: 45px;
+  border: 1px solid #c8d5ba;
+  border-radius: 50%;
+  margin-bottom: 28px;
+  color: #567043;
+}
+.lp-start-grid .lp-micro {
+  font-size: 9px;
+  line-height: 1.6;
+  letter-spacing: 1px;
+}
+.lp-start-grid h3 {
+  font-size: 23px;
+  margin: 13px 0 14px;
+}
+.lp-start-grid p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #50634e;
+  margin-bottom: 20px;
+}
+.lp-start-grid a,
+.lp-start-grid button {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0;
+  text-align: left;
+}
+@media (max-width: 900px) {
+  .lp-start-section {
+    padding: 45px 28px 8px;
+  }
+  .lp-start-grid {
+    gap: 12px;
+  }
+  .lp-start-grid article {
+    padding: 20px;
+  }
+}
+@media (max-width: 650px) {
+  .lp-start-section {
+    padding: 38px 22px 5px;
+  }
+  .lp-start-grid {
+    grid-template-columns: 1fr;
+  }
+  .lp-start-grid article {
+    padding: 25px;
+  }
+  .lp-start-icon {
+    margin-bottom: 20px;
+  }
+  .lp-start-grid p {
+    font-size: 14px;
+  }
+  .lp-start-grid a,
+  .lp-start-grid button {
+    font-size: 13px;
+  }
+}
