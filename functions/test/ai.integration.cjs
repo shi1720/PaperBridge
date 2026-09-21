@@ -69,7 +69,7 @@ after(async () => {
   );
   await db.collection("papers").doc(paperId).delete();
 });
-test("AI ownership, consent, secret isolation, four stages, idempotency and daily cap", async () => {
+test("AI ownership, consent, secret isolation, six stages, idempotency and daily cap", async () => {
   await assert.rejects(
     handleAI("ai.settings", {}, ""),
     (e) => e.code === "unauthenticated",
@@ -118,7 +118,15 @@ test("AI ownership, consent, secret isolation, four stages, idempotency and dail
   const cfg = { provider: "openai", model: "gpt-test" };
   await handleAI(
     "ai.configure",
-    { agents: { evidence: cfg, originality: cfg, reviewer: cfg } },
+    {
+      agents: {
+        evidence: cfg,
+        originality: cfg,
+        reviewer: cfg,
+        formatting: cfg,
+        readiness: cfg,
+      },
+    },
     uid,
   );
   const settings = await handleAI("ai.settings", {}, uid);
@@ -137,19 +145,27 @@ test("AI ownership, consent, secret isolation, four stages, idempotency and dail
     handleAI("ai.review", payload, uid),
   ]);
   assert.equal(one.id, two.id);
-  assert.equal(generations, 4);
+  assert.equal(generations, 6);
   const job = await handleAI("ai.job.get", { id: one.id }, uid);
   assert.equal(job.status, "completed");
   assert.deepEqual(Object.keys(job.results).sort(), [
     "evidence",
+    "formatting",
     "originality",
+    "readiness",
     "reviewer",
     "synthesis",
   ]);
   assert.equal(job.consent.metadataLookup, false);
   assert.equal(job.scope.reviewedCharacters, text.length);
+  assert.equal(job.scope.mode, "full");
+  assert.equal(job.scope.sourceCoverage, "unknown");
+  assert.equal(Object.keys(job.stages).length, 6);
+  assert.ok(
+    Object.values(job.stages).every((stage) => stage.status === "completed"),
+  );
   await handleAI("ai.review", payload, uid);
-  assert.equal(generations, 4);
+  assert.equal(generations, 6);
   await assert.rejects(
     handleAI("ai.job.get", { id: one.id }, other),
     (e) => e.code === "not-found",
@@ -168,7 +184,7 @@ test("AI ownership, consent, secret isolation, four stages, idempotency and dail
     handleAI("ai.review", { ...payload, requestId: "daily-limit" }, uid),
     (e) => e.code === "resource-exhausted",
   );
-  assert.equal(generations, 4);
+  assert.equal(generations, 6);
   await handleAI("ai.key.delete", { provider: "openai" }, uid);
   assert.equal((await handleAI("ai.settings", {}, uid)).keys.length, 0);
 });
@@ -180,9 +196,13 @@ test("provider failures retain partial audits and release concurrency lease", as
     uid,
   );
   const normal = global.fetch;
-  let attempts = 0;
   global.fetch = async (...args) => {
-    if (String(args[0]).endsWith("/responses") && ++attempts === 2)
+    if (
+      String(args[0]).endsWith("/responses") &&
+      JSON.parse(args[1].body).instructions.includes(
+        "Task: Attribution and positioning review",
+      )
+    )
       return new Response("Do not expose provider body or secret", {
         status: 429,
       });
@@ -202,7 +222,7 @@ test("provider failures retain partial audits and release concurrency lease", as
     assert.equal(job.status, "partial");
     assert.equal(job.errors[0].agent, "originality");
     assert.equal(job.errors[0].code, "rate_limit");
-    assert.equal(Object.keys(job.results).length, 3);
+    assert.equal(Object.keys(job.results).length, 5);
     assert.equal(JSON.stringify(job).includes("Do not expose"), false);
     assert.equal(job.scope.text, undefined);
     assert.equal(
@@ -256,5 +276,60 @@ test("AI credential/catalog requests cannot bypass the shared per-minute provide
       .update(`${account}:ai.key.save:${Math.floor(now / 60000)}`)
       .digest("hex");
     await db.doc("rateLimits/" + hash).delete();
+  }
+});
+
+test("full mode rejects incomplete extraction before provider calls and requires explicit partial consent", async () => {
+  await db.collection("aiUsage").doc(uid).delete();
+  await db
+    .collection("papers")
+    .doc(paperId)
+    .update({
+      pdfAnalysis: {
+        version: 1,
+        totalPages: 3,
+        scannedPages: 2,
+        textTruncated: false,
+        pages: [],
+      },
+    });
+  const beforeCalls = generations;
+  try {
+    await assert.rejects(
+      handleAI(
+        "ai.review",
+        {
+          paperId,
+          requestId: "incomplete-full",
+          consent: true,
+          allowMetadataLookup: false,
+          coverageMode: "full",
+        },
+        uid,
+      ),
+      (e) => e.code === "failed-precondition" && /incomplete/.test(e.message),
+    );
+    assert.equal(generations, beforeCalls);
+    const job = await handleAI(
+      "ai.review",
+      {
+        paperId,
+        requestId: "incomplete-partial",
+        consent: true,
+        allowMetadataLookup: false,
+        coverageMode: "partial",
+      },
+      uid,
+    );
+    assert.equal(job.scope.mode, "partial");
+    assert.equal(job.scope.sourceCoverage, "incomplete");
+    assert.equal(job.status, "completed");
+  } finally {
+    await db
+      .collection("papers")
+      .doc(paperId)
+      .update({
+        pdfAnalysis: require("firebase-admin/firestore").FieldValue.delete(),
+      });
   }
 });

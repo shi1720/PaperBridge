@@ -10,7 +10,9 @@ export async function rateLimit(uid: string, action: string): Promise<void> {
     action.endsWith(".messages") ||
     action.endsWith(".comments");
   const max =
-    action === "request.create" || action === "paper.upload"
+    action === "request.create" ||
+    action === "paper.upload" ||
+    action === "media.upload"
       ? 12
       : action.startsWith("ai.")
         ? 20

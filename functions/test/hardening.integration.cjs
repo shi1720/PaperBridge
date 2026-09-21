@@ -292,3 +292,127 @@ test("focused post lookup is public but block-aware, and social notifications li
   assert.ok(notices.some((n) => n.link === `/community#post-${id}`));
   assert.ok(notices.some((n) => n.link === `/messages?chat=${chat.id}`));
 });
+
+test("likes and comments recheck visibility, blocks, and author deletion after an initially authorized read", async () => {
+  const postId = prefix + "-racing-post",
+    postRef = db.doc("posts/" + postId);
+  const outgoing = db.doc("blocks/" + hash(`${a}:${b}`)),
+    incoming = db.doc("blocks/" + hash(`${b}:${a}`)),
+    deletion = db.doc("deletionJobs/" + b);
+  socialRefs.add(postRef.path);
+  socialRefs.add(outgoing.path);
+  socialRefs.add(incoming.path);
+  socialRefs.add(deletion.path);
+  const prototype = Object.getPrototypeOf(postRef),
+    originalGet = prototype.get,
+    originalGetAll = db.getAll;
+  for (const action of ["feed.like", "feed.comment"]) {
+    for (const change of [
+      "private",
+      "deleting",
+      "author-deleted",
+      "outgoing-block",
+      "incoming-block",
+    ]) {
+      await Promise.all([
+        outgoing.delete(),
+        incoming.delete(),
+        deletion.delete(),
+      ]);
+      await postRef.set({
+        authorId: b,
+        body: "Initially public",
+        visibility: "public",
+        createdAt: Date.now(),
+        likeCount: 0,
+        commentCount: 0,
+      });
+      const beforeNotices = (
+        await db.collection("notifications").where("userId", "==", b).get()
+      ).size;
+      let injected = false;
+      const mutate = async () => {
+        injected = true;
+        if (change === "private")
+          await postRef.update({ visibility: "private" });
+        else if (change === "deleting")
+          await postRef.update({ deleting: true });
+        else if (change === "author-deleted")
+          await deletion.set({ status: "pending" });
+        else
+          await (change === "outgoing-block" ? outgoing : incoming).set({
+            ownerId: change === "outgoing-block" ? a : b,
+            targetId: change === "outgoing-block" ? b : a,
+          });
+      };
+      // Return the previously authorized snapshot, but change state before the write transaction starts.
+      prototype.get = async function (...args) {
+        const snapshot = await originalGet.apply(this, args);
+        if (
+          !injected &&
+          this.path === postRef.path &&
+          !change.endsWith("block")
+        )
+          await mutate();
+        return snapshot;
+      };
+      db.getAll = async function (...refs) {
+        const snapshots = await originalGetAll.apply(this, refs);
+        if (
+          !injected &&
+          change.endsWith("block") &&
+          refs.some((ref) => ref.path === outgoing.path)
+        )
+          await mutate();
+        return snapshots;
+      };
+      try {
+        await assert.rejects(
+          call(a, action, { id: postId, body: "Racing comment" }),
+          (e) => ["not-found", "permission-denied"].includes(e.code),
+        );
+        assert.equal(
+          injected,
+          true,
+          "race fixture must run after the initial read",
+        );
+      } finally {
+        prototype.get = originalGet;
+        db.getAll = originalGetAll;
+      }
+      assert.equal(
+        (await db.doc("likes/" + hash(`${a}:${postId}`)).get()).exists,
+        false,
+      );
+      assert.equal(
+        (
+          await db
+            .collection("postComments")
+            .where("postId", "==", postId)
+            .get()
+        ).size,
+        0,
+      );
+      assert.equal(
+        (await db.collection("notifications").where("userId", "==", b).get())
+          .size,
+        beforeNotices,
+      );
+      const final = (await postRef.get()).data();
+      assert.equal(final.likeCount, 0);
+      assert.equal(final.commentCount, 0);
+    }
+  }
+  await Promise.all([outgoing.delete(), incoming.delete(), deletion.delete()]);
+  await postRef.set({
+    authorId: a,
+    body: "Own private post",
+    visibility: "private",
+    createdAt: Date.now(),
+    likeCount: 0,
+    commentCount: 0,
+  });
+  assert.equal((await call(a, "feed.like", { id: postId })).liked, true);
+  await call(a, "feed.comment", { id: postId, body: "Own private reflection" });
+  socialRefs.add("likes/" + hash(`${a}:${postId}`));
+});

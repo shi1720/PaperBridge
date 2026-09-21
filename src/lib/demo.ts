@@ -271,7 +271,28 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
       return row;
     }
     case "annotation.list":
-      return notes.filter((x) => x.paperId === p.paperId);
+      return notes.filter(
+        (x) =>
+          x.paperId === p.paperId &&
+          (!p.requestId || !x.requestId || x.requestId === p.requestId),
+      );
+    case "annotation.reply": {
+      const note = notes.find((x) => x.id === p.id);
+      if (!note) throw Error("Note not found.");
+      (note.replies ||= []).push({ ...stamped, body: p.body });
+      return note;
+    }
+    case "annotation.resolve": {
+      const note = notes.find((x) => x.id === p.id);
+      if (!note) throw Error("Note not found.");
+      Object.assign(note, {
+        resolved: p.resolved,
+        resolvedBy: p.resolved ? demoProfile.id : null,
+        resolvedByName: p.resolved ? demoProfile.name : null,
+        resolvedAt: p.resolved ? Date.now() : null,
+      });
+      return note;
+    }
     case "annotation.save": {
       const row = { ...stamped, ...p };
       notes.push(row);
@@ -285,7 +306,10 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
       return { ok: true };
     case "feed.list":
       return feed.filter(
-        (post) => !p.following || following.has(post.authorId),
+        (post) =>
+          (!p.following || following.has(post.authorId)) &&
+          (!p.saved || post.saved) &&
+          (!p.authorId || post.authorId === p.authorId),
       );
     case "feed.get":
       return feed.find((post) => post.id === p.id);
@@ -293,6 +317,22 @@ export async function demoCall(action: string, p: any = {}): Promise<any> {
       const row = { ...stamped, ...p, likes: 0, commentCount: 0 };
       feed.unshift(row);
       return row;
+    }
+    case "feed.edit": {
+      const row = feed.find((x) => x.id === p.id);
+      if (!row || row.authorId !== demoProfile.id)
+        throw Error("You can edit only your posts.");
+      Object.assign(row, {
+        body: p.body,
+        postType: p.postType,
+        updatedAt: Date.now(),
+      });
+      return row;
+    }
+    case "feed.save": {
+      const row = feed.find((x) => x.id === p.id);
+      if (row) row.saved = !row.saved;
+      return { saved: !!row?.saved };
     }
     case "feed.like": {
       const row = feed.find((x) => x.id === p.id);

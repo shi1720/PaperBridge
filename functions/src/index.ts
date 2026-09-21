@@ -13,6 +13,10 @@ export {
   retryQueuedEmail as paperbridgeRetryQueuedEmail,
 } from "./email";
 export { uploadManuscript as paperbridgeUploadManuscript } from "./uploads";
+export {
+  uploadMedia as paperbridgeUploadMedia,
+  cleanupMedia as paperbridgeCleanupMedia,
+} from "./media";
 export const paperbridgeApi = onCall(
   {
     region: "us-central1",

@@ -11,11 +11,11 @@ The production homepage explains endorsement requests, category filters, researc
 ## What is implemented
 
 - Researcher and endorser onboarding, email/password and optional Google authentication, verification, recovery, public profiles, 155 canonical arXiv categories, self-attested eligibility, availability and capacity.
-- Private PDF manuscripts, revision history with immutable files and version-specific notes, PDF.js rendering, text selection and persistent highlights, page-aware private/shared notes, bounded text extraction.
-- Atomic endorsement requests with duplicate/capacity protection, private conversations, reviewing/change-request/offer/decline/withdrawal states, and author-reported arXiv completion.
+- Private PDF manuscripts, immutable revisions, searchable PDF reader with thumbnails, fit-width/focus controls, persistent highlights, filtered private/shared notes, threaded replies and resolution, and extraction/coverage diagnostics.
+- Atomic endorsement requests with duplicate/capacity protection and a dedicated in-app collaboration workspace: stage tracking, manuscript and request-scoped shared notes, discussion, revisions and activity history. Reviewing/change-request/offer/decline/withdrawal states and author-reported arXiv completion remain explicit. Email provides notifications linking back into the workspace.
 - Branded HTML/plain-text verification, password recovery and two-recipient review emails, with an embedded logo, durable SMTP outbox, retry/backoff and honest queued/sent/failed visibility.
-- Community feed, arXiv links, likes, comments, server-filtered following, researcher discovery and profile pages, private chat, actionable notifications, blocking, reporting and reported-contribution rankings.
-- Encrypted per-user OpenAI/Anthropic/Gemini keys; dynamic model catalogs; independently configured evidence, attribution and critical-reader agents; synthesis, optional Crossref metadata tools, exact-quote grounding, source audit, explicit consent, usage limits, and safe retry IDs.
+- Community image/PDF posts, four post categories, edit/delete, saved reading lists, in-app attachment viewing, arXiv links, likes/comments, following, researcher profiles with photos, private chat, notifications, blocking and reporting. Authenticated media uploads are validated; images are decoded and re-encoded, file access is signed and temporary, and cleanup removes abandoned/replaced uploads.
+- Encrypted per-user OpenAI/Anthropic/Gemini keys; dynamic model catalogs; five independently configured specialists for evidence, attribution, methods, formatting and submission readiness; GPT-6 Astra medium recommendation when available; full extracted-text or explicit partial coverage; synthesis and export, optional Crossref metadata tools, exact-quote grounding, source audit, explicit consent, usage limits, and safe retry IDs.
 - Account exports, provider-key removal, profile privacy and deletion with token revocation, in-flight operation leases, anonymization and retryable cleanup.
 - Responsive layouts, keyboard-accessible dialogs, empty/error/loading states, CSP/security headers and automated browser/access-control tests.
 
@@ -53,7 +53,7 @@ npm run test:full
 
 `test:full` starts an isolated demo Firebase suite, tests the backend, then starts two Vite servers and executes browser flows. Stop previously running emulators first to avoid port conflicts. The backend integration suite intentionally resets the **demo-paperbridge emulator database**, never a live project. Do not run it against a development session containing data you need.
 
-The browser suite covers genuine two-account sign-up, verified role setup, PDF upload/rendering, category matching, request/feedback/withdrawal and loss of reviewer access; demo UI journeys and mobile layout; AI result rendering; and accessibility checks. Provider network calls are mocked in the automatic suite. Separately authorized four-stage live OpenAI and complete browser-to-callable BYOK tests passed using a dynamically discovered model; Anthropic/Gemini have adapter tests but no live key was supplied.
+The browser suite covers genuine two-account sign-up, verified role setup, PDF upload/rendering, category matching, request/feedback/withdrawal and loss of reviewer access; demo UI journeys and mobile layout; AI result rendering; and accessibility checks. Provider network calls are mocked in the automatic suite. Separately authorized live OpenAI checks include six-stage GPT-6 Astra medium generation and earlier complete browser-to-callable BYOK verification; Anthropic/Gemini have adapter tests but no live key was supplied.
 
 ## Deployment
 
@@ -68,8 +68,8 @@ Follow [deployment.md](docs/deployment.md). Keep provider keys out of `.env` fil
 
 [Validation record](docs/validation.md) · [API contract](docs/contract.md) · [Backend operations](docs/backend.md) · [AI design and verification](docs/ai.md) · [Simulated product study](docs/product-review.md)
 
-The callable API is the only client entrypoint to Firestore. Direct client database access is denied. PDF URLs expire after ten minutes; a withdrawal prevents new links, but existing links survive until expiry and downloaded copies cannot be recalled. Shared notes are only visible to authors and active reviewers.
+The callable API is the only client entrypoint to Firestore. Direct client database access is denied. PDF URLs expire after ten minutes; a withdrawal prevents new links, but existing links survive until expiry and downloaded copies cannot be recalled. Notes created in a request workspace are scoped to that participant pair, with private notes restricted to their author. Earlier paper-wide shared annotations retain their original audience. Closing a request stops new reviewer access.
 
-Current deliberate limits: no paid subscription checkout; moderation reports require an operator; histories return bounded newest records without older-message pagination; no OCR/full-text plagiarism corpus; AI is a bounded synchronous four-stage pipeline with saved partial results rather than a durable background queue. Production billing alerts, App Check enforcement, monitoring and a staffed support process are operator setup work. These are not represented as completed.
+Current deliberate limits: no paid subscription checkout; moderation reports require an operator; histories return bounded newest records without older-message pagination; no OCR/full-text plagiarism corpus; AI is a bounded synchronous six-stage pipeline with saved partial results rather than a durable background queue. Production billing alerts, App Check enforcement, monitoring and a staffed support process are operator setup work. These are not represented as completed.
 
 The repository is private. Development fixtures are fictional and are not production member records.

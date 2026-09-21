@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowUpRight,
   ArrowLeft,
@@ -10,6 +10,13 @@ import {
   ArrowRight,
   Inbox,
   ShieldCheck,
+  MessageSquare,
+  Highlighter,
+  GitBranch,
+  Upload,
+  LockKeyhole,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import { useApp, useData } from "../lib/context";
 import { STATUS, date } from "../lib/types";
@@ -23,6 +30,10 @@ import {
   External,
   Modal,
 } from "./ui";
+import { PdfReader } from "./PdfReader";
+import { UploadModal } from "./Papers";
+import "./request-workspace.css";
+
 export function Requests({ onAuth }: { onAuth: () => void }) {
   const { profile } = useApp();
   const { data, error, loading } = useData("request.list", {}, !!profile);
@@ -45,7 +56,7 @@ export function Requests({ onAuth }: { onAuth: () => void }) {
             ? "Your review desk."
             : "Your next steps, together."
         }
-        description="Follow each conversation from a first introduction to the arXiv handoff."
+        description="Open a shared workspace for each manuscript: track the stage, read together, discuss feedback, and move the next revision forward."
         action={
           <Link to="/discover" className="button primary">
             Find an endorser <ArrowUpRight size={16} />
@@ -173,12 +184,31 @@ export function RequestDetail() {
     error,
     loading,
   } = useData("request.get", { id }, !!profile, 15000);
-  const { data: messages } = useData(
+  const { data: messages, error: messageError } = useData(
     "request.messages",
     { id },
     !!profile,
     15000,
   );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = ["manuscript", "activity"].includes(searchParams.get("tab") || "")
+    ? searchParams.get("tab")!
+    : "discussion";
+  const paperQuery = useData(
+    "paper.get",
+    { id: r?.paperId },
+    !!profile && !!r?.paperId,
+    30000,
+  );
+  const paper = paperQuery.data;
+  const [revisionOpen, setRevisionOpen] = useState(false),
+    [viewingVersion, setViewingVersion] = useState<any>(null);
+  useEffect(() => {
+    setViewingVersion(null);
+  }, [paper?.version, id]);
+  function changeTab(value: string) {
+    setSearchParams(value === "discussion" ? {} : { tab: value });
+  }
   const [body, setBody] = useState(""),
     [busy, setBusy] = useState(false),
     [next, setNext] = useState(""),
@@ -213,7 +243,7 @@ export function RequestDetail() {
       setBusy(false);
     }
   }
-  if (loading) return <Loading />;
+  if (loading && !r) return <Loading />;
   if (error) return <ErrorBox message={error} />;
   if (!r)
     return (
@@ -228,82 +258,331 @@ export function RequestDetail() {
         All requests
       </Link>
       <PageHeading
-        eyebrow="PRIVATE REVIEW CONVERSATION"
+        eyebrow="YOUR SHARED RESEARCH WORKSPACE"
         title={r.title}
         description={`${r.requesterName} → ${r.reviewerName} · Submitted ${date(r.createdAt)}`}
       />
-      <div className="request-detail-grid">
-        <section>
-          <div className="panel">
-            <div className="panel-heading">
-              <h2>The introduction</h2>
-              <span className={"status-badge " + r.status}>
-                {STATUS[r.status]}
-              </span>
-            </div>
-            <p className="preserve-lines">{r.message}</p>
-            <div className="button-row">
-              <Link className="button" to={"/papers/" + r.paperId}>
-                <FileText size={17} />
-                Read manuscript
-              </Link>
-              <Tag>{r.category}</Tag>
-            </div>
+      <section className="workspace-stage-card" aria-label="Review stages">
+        <div className="workspace-current-stage">
+          <div>
+            <span className="overline">CURRENT STAGE</span>
+            <span className={"status-badge " + r.status}>
+              {STATUS[r.status]}
+            </span>
           </div>
-          <div className="panel conversation">
-            <div className="panel-heading">
-              <h2>Make the work stronger</h2>
-              <span className="muted">Private conversation</span>
-            </div>
-            {messages?.length ? (
-              messages.map((m: any) => (
-                <article className="message" key={m.id}>
-                  <Avatar name={m.authorName || "Researcher"} />
-                  <div>
-                    <strong>{m.authorName || "Status update"}</strong>
-                    <time>{date(m.createdAt)}</time>
-                    <p>{m.body}</p>
-                    {m.status && (
-                      <span className={"status-badge " + m.status}>
-                        {STATUS[m.status]}
-                      </span>
-                    )}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className="muted">
-                Ask a question, suggest an improvement, or share context for
-                your review.
-              </p>
-            )}
-            {!closed && (
-              <form className="message-form" onSubmit={send}>
-                <textarea
-                  required
-                  disabled={busy}
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={3}
-                  maxLength={10000}
-                  placeholder="Leave thoughtful feedback or ask a question…"
-                  aria-label="Review comment"
-                />
+          <p>
+            {r.status === "pending"
+              ? "The researcher can accept the review and begin collaborating here."
+              : r.status === "changes_requested"
+                ? "Work through the feedback, upload a revision, then ask for another look."
+                : r.status === "accepted"
+                  ? "The researcher has offered to help. Complete the official endorsement on arXiv."
+                  : closed
+                    ? "This workspace preserves the conversation and its history."
+                    : "Review the manuscript together. Shared notes and discussion stay with this request."}
+          </p>
+        </div>
+        <ol className="workspace-stage-track">
+          {[
+            ["Request sent", "Introduction & manuscript"],
+            ["Review together", "Notes, discussion & revisions"],
+            ["Offer to endorse", "Researcher’s decision"],
+            ["arXiv handoff", "Author reports completion"],
+          ].map(([label, detail], index) => {
+            const stage =
+              r.status === "endorsed"
+                ? 3
+                : r.status === "accepted"
+                  ? 2
+                  : ["reviewing", "changes_requested"].includes(r.status)
+                    ? 1
+                    : 0;
+            return (
+              <li
+                key={label}
+                className={
+                  index === stage &&
+                  !["declined", "withdrawn"].includes(r.status)
+                    ? "current"
+                    : index < stage
+                      ? "done"
+                      : ""
+                }
+                aria-current={
+                  index === stage &&
+                  !["declined", "withdrawn"].includes(r.status)
+                    ? "step"
+                    : undefined
+                }
+              >
+                <span>{index < stage ? <Check size={15} /> : index + 1}</span>
                 <div>
-                  <small>
-                    Only the author and selected endorser can see this.
-                  </small>
-                  <button
-                    className="button primary"
-                    disabled={busy || !body.trim()}
-                  >
-                    <Send size={16} />
-                    Send
-                  </button>
+                  <strong>{label}</strong>
+                  <small>{detail}</small>
                 </div>
-              </form>
-            )}
-          </div>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+      <nav className="workspace-navigation" aria-label="Request workspace">
+        {[
+          ["discussion", "Discussion", MessageSquare],
+          ["manuscript", "Manuscript & notes", Highlighter],
+          ["activity", "Activity & revisions", GitBranch],
+        ].map(([value, label, Icon]: any) => (
+          <button
+            key={value}
+            id={"workspace-tab-" + value}
+            aria-pressed={tab === value}
+            onClick={() => changeTab(value)}
+          >
+            <Icon size={17} />
+            {label}
+          </button>
+        ))}
+        <span>
+          <LockKeyhole size={13} /> Author & selected researcher
+        </span>
+      </nav>
+      <div
+        className={
+          "request-detail-grid workspace-layout " +
+          (tab === "manuscript" ? "document-active" : "")
+        }
+      >
+        <section
+          role="region"
+          id={"workspace-panel-" + tab}
+          aria-labelledby={"workspace-tab-" + tab}
+        >
+          {tab === "discussion" && (
+            <>
+              <div className="panel">
+                <div className="panel-heading">
+                  <h2>The introduction</h2>
+                  <span className={"status-badge " + r.status}>
+                    {STATUS[r.status]}
+                  </span>
+                </div>
+                <p className="preserve-lines">{r.message}</p>
+                <div className="button-row">
+                  <Link
+                    className="button"
+                    to={"/requests/" + id + "?tab=manuscript"}
+                  >
+                    <FileText size={17} />
+                    Read manuscript
+                  </Link>
+                  <Tag>{r.category}</Tag>
+                </div>
+              </div>
+              <div className="panel conversation">
+                <div className="panel-heading">
+                  <h2>Discuss this manuscript</h2>
+                  <span className="muted">In-app conversation</span>
+                </div>
+                {messageError && <ErrorBox message={messageError} />}
+                {messages?.length ? (
+                  messages.map((m: any) => (
+                    <article className="message" key={m.id}>
+                      <Avatar
+                        name={m.authorName || "Researcher"}
+                        src={m.authorAvatarUrl}
+                      />
+                      <div>
+                        <strong>{m.authorName || "Status update"}</strong>
+                        <time>{date(m.createdAt)}</time>
+                        <p>{m.body}</p>
+                        {m.status && (
+                          <span className={"status-badge " + m.status}>
+                            {STATUS[m.status]}
+                          </span>
+                        )}
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <p className="muted">
+                    Ask a question, suggest an improvement, or share context for
+                    your review.
+                  </p>
+                )}
+                {!closed && (
+                  <form className="message-form" onSubmit={send}>
+                    <textarea
+                      required
+                      disabled={busy}
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      rows={3}
+                      maxLength={10000}
+                      placeholder="Leave thoughtful feedback or ask a question…"
+                      aria-label="Review comment"
+                    />
+                    <div>
+                      <small>
+                        Only the author and selected endorser can see this.
+                      </small>
+                      <button
+                        className="button primary"
+                        disabled={busy || !body.trim()}
+                      >
+                        <Send size={16} />
+                        Send
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </>
+          )}
+          {tab === "manuscript" && (
+            <div className="workspace-document">
+              <div className="workspace-document-heading paper-detail-heading">
+                <div>
+                  <p className="overline">READ, ANNOTATE, REVISE</p>
+                  <h2>One manuscript. A shared place to improve it.</h2>
+                  <div className="tags">
+                    <Tag>{r.category}</Tag>
+                    <Tag>
+                      Version {viewingVersion?.version || paper?.version || 1}
+                    </Tag>
+                  </div>
+                </div>
+                <div className="button-row">
+                  {paper?.ownerId === profile?.id && !closed && (
+                    <button
+                      className="button"
+                      onClick={() => setRevisionOpen(true)}
+                    >
+                      <Upload size={16} />
+                      Upload revision
+                    </button>
+                  )}
+                  <Link className="text-link" to={"/papers/" + r.paperId}>
+                    Open manuscript workspace <ArrowUpRight size={15} />
+                  </Link>
+                </div>
+              </div>
+              <p className="workspace-note-boundary">
+                <LockKeyhole size={15} /> Shared notes here belong to this
+                request. Private notes are visible only to their author. Email
+                alerts bring you back to this workspace.
+              </p>
+              {paperQuery.error ? (
+                <ErrorBox message={paperQuery.error} />
+              ) : !paper ? (
+                <Loading />
+              ) : (
+                <>
+                  {paper.versions?.length > 1 && (
+                    <div className="version-bar">
+                      <label>
+                        Manuscript version
+                        <select
+                          value={viewingVersion?.version || paper.version}
+                          onChange={async (e) => {
+                            const version = Number(e.target.value);
+                            if (version === paper.version) {
+                              setViewingVersion(null);
+                              return;
+                            }
+                            try {
+                              const previous = await call("paper.version.get", {
+                                id: paper.id,
+                                version,
+                              });
+                              setViewingVersion({
+                                ...paper,
+                                ...previous,
+                                currentVersion: paper.version,
+                              });
+                            } catch (error: any) {
+                              toast(error.message);
+                            }
+                          }}
+                        >
+                          {[...paper.versions].reverse().map((v: any) => (
+                            <option value={v.version} key={v.version}>
+                              Version {v.version} · {date(v.updatedAt)}
+                              {v.version === paper.version ? " · current" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <small>
+                        Notes stay with their manuscript version. Previous
+                        versions are read-only.
+                      </small>
+                    </div>
+                  )}
+                  <PdfReader
+                    paper={
+                      viewingVersion || {
+                        ...paper,
+                        currentVersion: paper.version || 1,
+                      }
+                    }
+                    requestId={id}
+                    readOnly={closed}
+                  />
+                </>
+              )}
+            </div>
+          )}
+          {tab === "activity" && (
+            <section className="panel workspace-activity">
+              <h2>The review, step by step</h2>
+              <p className="muted">
+                Status decisions and manuscript revisions form the shared
+                history of this request.
+              </p>
+              {messageError && <ErrorBox message={messageError} />}
+              <ol>
+                {[
+                  {
+                    id: "created",
+                    createdAt: r.createdAt,
+                    title: "Request sent",
+                    body: `${r.requesterName} invited ${r.reviewerName} to review this manuscript.`,
+                  },
+                  ...(messages || [])
+                    .filter((m: any) => m.status)
+                    .map((m: any) => ({
+                      ...m,
+                      title: STATUS[m.status] || "Status updated",
+                    })),
+                  ...(paper?.versions || [])
+                    .filter((v: any) => v.updatedAt >= r.createdAt)
+                    .map((v: any) => ({
+                      id: "version-" + v.version,
+                      createdAt: v.updatedAt,
+                      title: `Manuscript version ${v.version}`,
+                      body:
+                        v.version === paper.version
+                          ? "Current version available in Manuscript & notes."
+                          : "Earlier version preserved with its annotations.",
+                    })),
+                ]
+                  .sort((a: any, b: any) => b.createdAt - a.createdAt)
+                  .map((event: any) => (
+                    <li key={event.id}>
+                      <span className="workspace-event-dot">
+                        <GitBranch size={16} />
+                      </span>
+                      <div>
+                        <h3>{event.title}</h3>
+                        <time>
+                          {new Date(event.createdAt).toLocaleString()}
+                        </time>
+                        <p>{event.body}</p>
+                      </div>
+                    </li>
+                  ))}
+              </ol>
+            </section>
+          )}
         </section>
         <aside>
           <div className="panel next-steps">
@@ -400,9 +679,22 @@ export function RequestDetail() {
           </div>
         </aside>
       </div>
+      {paper && (
+        <UploadModal
+          open={revisionOpen}
+          onClose={() => setRevisionOpen(false)}
+          existing={paper}
+          onSaved={() => {
+            setViewingVersion(null);
+            refresh();
+          }}
+        />
+      )}
       <Modal
         open={!!next}
-        onClose={() => setNext("")}
+        onClose={() => {
+          if (!busy) setNext("");
+        }}
         title={
           next === "accepted"
             ? "Offer to help with endorsement?"
@@ -432,7 +724,11 @@ export function RequestDetail() {
           />
         </label>
         <div className="button-row">
-          <button className="button" onClick={() => setNext("")}>
+          <button
+            className="button"
+            disabled={busy}
+            onClick={() => setNext("")}
+          >
             Cancel
           </button>
           <button className="button primary" onClick={status} disabled={busy}>

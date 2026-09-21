@@ -212,3 +212,78 @@ export function profileInput(input: any) {
     publicProfile: input.publicProfile !== false,
   };
 }
+
+/** Advisory PDF observations supplied by the browser; never evidence of verification. */
+export function pdfAnalysisInput(input: any): any {
+  if (input == null) return null;
+  if (
+    input.version !== 1 ||
+    !Array.isArray(input.pages) ||
+    typeof input.textTruncated !== "boolean"
+  )
+    throw new DomainError("invalid-argument", "Invalid PDF analysis metadata.");
+  const integer = (value: any, label: string, low: number, high: number) => {
+    const n = number(value, label, low, high);
+    if (!Number.isInteger(n))
+      throw new DomainError(
+        "invalid-argument",
+        `${label} must be a whole number.`,
+      );
+    return n;
+  };
+  const totalPages = integer(input.totalPages, "PDF page count", 1, 10000);
+  const scannedPages = integer(
+    input.scannedPages,
+    "Analyzed page count",
+    0,
+    Math.min(totalPages, 100),
+  );
+  if (input.pages.length !== scannedPages)
+    throw new DomainError(
+      "invalid-argument",
+      "PDF analysis page coverage does not match its pages.",
+    );
+  const pages = input.pages.map((p: any, index: number) => {
+    if (!p || p.page !== index + 1)
+      throw new DomainError(
+        "invalid-argument",
+        "PDF analysis pages must be sequential.",
+      );
+    const bounds =
+      p.textBounds == null
+        ? null
+        : {
+            left: number(p.textBounds.left, "Text left", -100000, 100000),
+            top: number(p.textBounds.top, "Text top", -100000, 100000),
+            right: number(p.textBounds.right, "Text right", -100000, 100000),
+            bottom: number(p.textBounds.bottom, "Text bottom", -100000, 100000),
+          };
+    if (bounds && (bounds.right < bounds.left || bounds.bottom < bounds.top))
+      throw new DomainError(
+        "invalid-argument",
+        "PDF text bounds are reversed.",
+      );
+    return {
+      page: p.page,
+      width: number(p.width, "Page width", 0.01, 20000),
+      height: number(p.height, "Page height", 0.01, 20000),
+      textCharacters: integer(p.textCharacters, "Page text count", 0, 10000000),
+      minFontSize: number(p.minFontSize, "Minimum font size", 0, 1000),
+      medianFontSize: number(p.medianFontSize, "Median font size", 0, 1000),
+      textBounds: bounds,
+    };
+  });
+  return {
+    version: 1,
+    totalPages,
+    scannedPages,
+    extractedCharacters: integer(
+      input.extractedCharacters,
+      "Extracted text count",
+      0,
+      100000,
+    ),
+    textTruncated: input.textTruncated,
+    pages,
+  };
+}

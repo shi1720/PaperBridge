@@ -6,9 +6,9 @@ PaperBridge retains [paperbridge.web.app](https://paperbridge.web.app) on Hostin
 
 - Firestore database `paperbridge`, `us-central1`, deletion protection enabled. Direct client access is denied.
 - Identity Platform tenant `PaperBridge-t4997`, email/password enabled. Every authenticated server entry point rejects other tenants before data access.
-- Private GCS bucket `paperbridge-files-359201230061`, uniform bucket access and public access prevention. Authenticated HTTP upload validates tenant, ownership, size and PDF signature; generation-zero writes prevent replacement. Short-lived signed URLs authorize reading.
+- Private GCS bucket `paperbridge-files-359201230061`, uniform bucket access and public access prevention. Authenticated HTTP upload validates tenant, ownership, size and PDF signature; generation-zero writes prevent replacement. Short-lived signed URLs authorize reading. `paperbridgeUploadMedia` handles validated profile photos and community images/PDFs; `paperbridgeCleanupMedia` removes expired upload drafts and detached media.
 - Runtime identity `paperbridge-runtime@gen-lang-client-0444960702.iam.gserviceaccount.com`: database-scoped Firestore access, tenant-scoped Editor access for account administration, dedicated bucket object access, self-signing and access to its two secrets. Eventarc receiving is granted to this identity, and Cloud Run invocation is limited to its email worker and scheduled handlers.
-- Functions codebase `paperbridge`, with five `paperbridge`-prefixed exports. Existing applications' functions and default databases are outside this deployment. Cloud Functions container artifacts expire after 30 days.
+- Functions codebase `paperbridge`, with seven `paperbridge`-prefixed exports. Existing applications' functions and default databases are outside this deployment. Cloud Functions container artifacts expire after 30 days.
 - Secret Manager: `PAPERBRIDGE_AI_KEY_ENCRYPTION_KEY` and `PAPERBRIDGE_SMTP_PASSWORD`. Preserve the encryption secret across deployments; rotating it requires migrating encrypted BYOK records.
 
 `firebase.production.json` deploys only the named database and PaperBridge functions. The GCS bucket is governed by private IAM; it does not use the parent project's Firebase Storage bucket. Local `storage.rules` also denies direct client access.

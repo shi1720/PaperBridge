@@ -9,6 +9,11 @@ import {
   ArrowRight,
   ArrowUpRight,
   BookOpen,
+  Bookmark,
+  FileText,
+  Pencil,
+  Lightbulb,
+  HelpCircle,
   Check,
   Flag,
   Heart,
@@ -25,7 +30,9 @@ import {
   X,
 } from "lucide-react";
 import { useApp, useData } from "../lib/context";
-import { date } from "../lib/types";
+import { date, type MediaAsset, type PostType } from "../lib/types";
+import { MediaPicker, PostAttachments } from "./CommunityMedia";
+import "./community.css";
 import {
   Avatar,
   Empty,
@@ -38,6 +45,34 @@ import {
 } from "./ui";
 type Row = Record<string, any>;
 type ReportTarget = { id: string; type: string; name: string };
+export const POST_TYPES: { id: PostType; label: string; prompt: string }[] = [
+  {
+    id: "update",
+    label: "Research update",
+    prompt:
+      "What are you exploring, testing, or learning? Share the context behind your work…",
+  },
+  {
+    id: "question",
+    label: "Ask a question",
+    prompt:
+      "What question could another researcher help you think through? Include what you have tried…",
+  },
+  {
+    id: "paper",
+    label: "Share a paper",
+    prompt:
+      "Introduce the paper. What is the main contribution, and what would you like readers to notice?",
+  },
+  {
+    id: "milestone",
+    label: "Milestone",
+    prompt:
+      "A first result, a new preprint, a lesson from a failed experiment. What moved your research forward?",
+  },
+];
+const typeLabel = (type: string) =>
+  POST_TYPES.find((t) => t.id === type)?.label || "Research update";
 const list = (value: any): Row[] => (Array.isArray(value) ? value : []);
 const time = (value: number) =>
   new Date(value).toLocaleString(undefined, {
@@ -152,8 +187,12 @@ export function Community({ onAuth }: { onAuth: () => void }) {
   const focusId = /^#post-([a-zA-Z0-9_-]+)$/.exec(location.hash)?.[1];
   const follows = useData("follow.list", {}, !!profile);
   const papers = useData("paper.list", {}, !!profile);
-  const [tab, setTab] = useState<"all" | "following">("all"),
+  const [tab, setTab] = useState<"all" | "following" | "saved">("all"),
     [body, setBody] = useState(""),
+    [postType, setPostType] = useState<PostType>("update"),
+    [typeFilter, setTypeFilter] = useState("all"),
+    [attachments, setAttachments] = useState<MediaAsset[]>([]),
+    [uploading, setUploading] = useState(false),
     [arxivUrl, setArxivUrl] = useState(""),
     [paperId, setPaperId] = useState(""),
     [busy, setBusy] = useState(false),
@@ -168,11 +207,21 @@ export function Community({ onAuth }: { onAuth: () => void }) {
   );
   const { data, error, loading } = useData(
     "feed.list",
-    { following: tab === "following" },
+    { following: tab === "following", saved: tab === "saved" },
     !!profile && !focusId,
   );
   const focused = useData("feed.get", { id: focusId }, !!profile && !!focusId);
-  const posts = focusId ? (focused.data ? [focused.data] : []) : list(data);
+  const loadedPosts = focusId
+    ? focused.data
+      ? [focused.data]
+      : []
+    : list(data);
+  const posts = loadedPosts.filter(
+    (p) =>
+      focusId ||
+      typeFilter === "all" ||
+      (p.postType || "update") === typeFilter,
+  );
   const feedError = focusId ? focused.error : error;
   const feedLoading = focusId ? focused.loading : loading;
   async function publish(e: FormEvent) {
@@ -182,12 +231,16 @@ export function Community({ onAuth }: { onAuth: () => void }) {
     try {
       await call("feed.post", {
         body: body.trim(),
+        postType,
+        mediaIds: attachments.map((a) => a.id),
         arxivUrl: arxivUrl.trim(),
         ...(paperId ? { paperId } : {}),
       });
       setBody("");
       setArxivUrl("");
       setPaperId("");
+      setAttachments([]);
+      setPostType("update");
       if (focusId) navigate("/community");
       refresh();
       toast(
@@ -250,11 +303,11 @@ export function Community({ onAuth }: { onAuth: () => void }) {
           thoughtful conversations.
         </SignInCard>
       ) : (
-        <div className="social-layout">
+        <div className="social-layout community-v2">
           <section className="social-feed">
             <form className="card social-composer form" onSubmit={publish}>
               <div className="social-author">
-                <Avatar name={profile.name} />
+                <Avatar name={profile.name} src={profile.avatarUrl} />
                 <div>
                   <strong>What are you working on?</strong>
                   <small>A question can be the start of a collaboration.</small>
@@ -265,6 +318,33 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                     View your research profile
                   </Link>
                 </div>
+              </div>
+              <div
+                className="post-type-choices"
+                role="group"
+                aria-label="Post type"
+              >
+                {POST_TYPES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    aria-pressed={postType === t.id}
+                    className={postType === t.id ? "selected" : ""}
+                    disabled={busy || uploading}
+                    onClick={() => setPostType(t.id)}
+                  >
+                    {t.id === "update" ? (
+                      <Lightbulb size={14} />
+                    ) : t.id === "question" ? (
+                      <HelpCircle size={14} />
+                    ) : t.id === "paper" ? (
+                      <FileText size={14} />
+                    ) : (
+                      <Trophy size={14} />
+                    )}{" "}
+                    {t.label}
+                  </button>
+                ))}
               </div>
               <label className="sr-only" htmlFor="post-body">
                 Your community post
@@ -277,49 +357,63 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                 rows={4}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                placeholder="Share an idea, ask for a perspective, or celebrate a small research milestone…"
+                placeholder={POST_TYPES.find((t) => t.id === postType)?.prompt}
               />
-              <div className="social-attachments">
-                <label>
-                  arXiv paper link <span className="optional">optional</span>
-                  <input
-                    type="url"
-                    disabled={busy}
-                    value={arxivUrl}
-                    onChange={(e) => setArxivUrl(e.target.value)}
-                    placeholder="https://arxiv.org/abs/…"
-                  />
-                </label>
-                {list(papers.data).some((p) => p.visibility === "public") && (
+              <MediaPicker
+                value={attachments}
+                onChange={setAttachments}
+                disabled={busy}
+                onBusy={setUploading}
+              />
+              <details className="post-link-options">
+                <summary>Add a research link or public manuscript</summary>
+                <div className="social-attachments">
                   <label>
-                    Attach a public manuscript
-                    <select
+                    arXiv paper link <span className="optional">optional</span>
+                    <input
+                      type="url"
                       disabled={busy}
-                      value={paperId}
-                      onChange={(e) => setPaperId(e.target.value)}
-                    >
-                      <option value="">No manuscript</option>
-                      {list(papers.data)
-                        .filter((p) => p.visibility === "public")
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.title}
-                          </option>
-                        ))}
-                    </select>
+                      value={arxivUrl}
+                      onChange={(e) => setArxivUrl(e.target.value)}
+                      placeholder="https://arxiv.org/abs/…"
+                    />
                   </label>
-                )}
-              </div>
+                  {list(papers.data).some((p) => p.visibility === "public") && (
+                    <label>
+                      Attach a public manuscript
+                      <select
+                        disabled={busy}
+                        value={paperId}
+                        onChange={(e) => setPaperId(e.target.value)}
+                      >
+                        <option value="">No manuscript</option>
+                        {list(papers.data)
+                          .filter((p) => p.visibility === "public")
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.title}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+              </details>
               <div className="social-compose-footer">
                 <span className="fine-print">
                   <Users size={14} /> Visible to signed-in community members.
-                  Keep unpublished details private.
+                  Attachments are shared with your post. Keep confidential
+                  drafts private.
                 </span>
                 <button
                   className="button primary"
-                  disabled={busy || !body.trim()}
+                  disabled={busy || uploading || !body.trim()}
                 >
-                  {busy ? "Publishing…" : "Publish post"}
+                  {busy
+                    ? "Publishing…"
+                    : uploading
+                      ? "Uploading…"
+                      : "Publish post"}
                   <ArrowUpRight size={16} />
                 </button>
               </div>
@@ -357,14 +451,46 @@ export function Community({ onAuth }: { onAuth: () => void }) {
                 >
                   Following <span>{following.size}</span>
                 </button>
+                <button
+                  className={tab === "saved" ? "active" : ""}
+                  onClick={() => {
+                    setTab("saved");
+                    if (focusId) navigate("/community");
+                  }}
+                >
+                  <Bookmark size={14} /> Saved
+                </button>
               </div>
-              <span className="muted">Latest conversations</span>
+              <label className="community-type-filter">
+                <span className="sr-only">Filter post type</span>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  disabled={!!focusId}
+                >
+                  <option value="all">All post types</option>
+                  {POST_TYPES.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
+            <p className="community-feed-context">
+              {focusId
+                ? "One conversation, in focus"
+                : tab === "saved"
+                  ? "Your private reading list · recent saved posts"
+                  : tab === "following"
+                    ? "Recent posts from your connections"
+                    : "Recent ideas, questions, papers, and progress"}
+            </p>
             {feedError && <ErrorBox message={feedError} />}{" "}
             {tab === "following" && follows.error && (
               <ErrorBox message={follows.error} />
             )}{" "}
-            {feedLoading ? (
+            {feedLoading && !(focusId ? focused.data : data) ? (
               <Loading />
             ) : feedError ? null : posts.length ? (
               posts.map((post) => (
@@ -387,30 +513,43 @@ export function Community({ onAuth }: { onAuth: () => void }) {
             ) : !feedError ? (
               <Empty
                 title={
-                  tab === "following"
-                    ? "Bring your people into focus"
-                    : "Start the first conversation"
+                  tab === "saved"
+                    ? "A reading list for your research"
+                    : typeFilter !== "all"
+                      ? "Make space for this kind of conversation"
+                      : tab === "following"
+                        ? "Bring your people into focus"
+                        : "Every research community starts with a question"
                 }
                 action={
-                  tab === "following" ? (
+                  tab === "saved" ? (
+                    <button className="button" onClick={() => setTab("all")}>
+                      Explore community posts <ArrowRight size={16} />
+                    </button>
+                  ) : tab === "following" ? (
                     <Link className="button" to="/researchers">
                       Discover researchers <ArrowRight size={16} />
                     </Link>
                   ) : (
                     <button
                       className="button"
-                      onClick={() =>
-                        document.getElementById("post-body")?.focus()
-                      }
+                      onClick={() => {
+                        setPostType("question");
+                        document.getElementById("post-body")?.focus();
+                      }}
                     >
                       Share a research question <Plus size={16} />
                     </button>
                   )
                 }
               >
-                {tab === "following"
-                  ? "Posts from the researchers you follow will appear here."
-                  : "A good question, an interesting preprint, a lesson learned: make room for someone else to build on it."}
+                {tab === "saved"
+                  ? "Save useful papers, questions, and ideas from any post. Your reading list is private to you."
+                  : typeFilter !== "all"
+                    ? "No posts of this type in the current view. Choose another filter, or share something you are working on."
+                    : tab === "following"
+                      ? "Posts from the researchers you follow will appear here."
+                      : "A good question, an interesting preprint, a lesson learned: make room for someone else to build on it."}
               </Empty>
             ) : null}
           </section>
@@ -419,11 +558,40 @@ export function Community({ onAuth }: { onAuth: () => void }) {
               <div className="rail-icon">
                 <MessageCircle size={24} />
               </div>
-              <h3>A commons for curious minds.</h3>
+              <h3>Make your research visible.</h3>
               <p>
                 Research is richer when we make our thinking visible. Ask
                 specific questions. Share context. Give thoughtful credit.
               </p>
+              <div className="community-starters">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPostType("question");
+                    document.getElementById("post-body")?.focus();
+                  }}
+                >
+                  <HelpCircle size={16} />
+                  <span>
+                    Ask a precise question
+                    <small>Invite another perspective</small>
+                  </span>
+                  <ArrowUpRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPostType("paper");
+                    document.getElementById("post-body")?.focus();
+                  }}
+                >
+                  <FileText size={16} />
+                  <span>
+                    Share a paper<small>Add the context behind it</small>
+                  </span>
+                  <ArrowUpRight size={14} />
+                </button>
+              </div>
               <div className="social-rail-stat">
                 <strong>{following.size}</strong>
                 <span>researchers you follow</span>
@@ -478,7 +646,7 @@ export function Community({ onAuth }: { onAuth: () => void }) {
   );
 }
 
-function PostCard({
+export function PostCard({
   post,
   following,
   openDiscussion = false,
@@ -499,7 +667,8 @@ function PostCard({
   const [open, setOpen] = useState(openDiscussion),
     [comment, setComment] = useState(""),
     [busy, setBusy] = useState(""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [editing, setEditing] = useState(false);
   const comments = useData("feed.comments", { id: post.id }, open);
   async function act(name: string, fn: () => Promise<any>) {
     setBusy(name);
@@ -524,7 +693,10 @@ function PostCard({
     <article className="card social-post" id={"post-" + post.id}>
       <header className="social-post-header">
         <div className="social-author">
-          <Avatar name={post.authorName || "Researcher"} />
+          <Avatar
+            name={post.authorName || "Researcher"}
+            src={post.authorAvatarUrl}
+          />
           <div>
             <Link
               className="researcher-name"
@@ -552,7 +724,14 @@ function PostCard({
           <Tag>Your post</Tag>
         )}
       </header>
+      <div className="post-meta-row">
+        <span className={`post-kind ${post.postType || "update"}`}>
+          {typeLabel(post.postType)}
+        </span>
+        {post.updatedAt > post.createdAt && <small>Edited</small>}
+      </div>
       <p className="social-post-body">{post.body}</p>
+      <PostAttachments assets={post.attachments || []} />
       {post.paperId && (
         <Link className="social-paper-link" to={"/papers/" + post.paperId}>
           <BookOpen size={20} />
@@ -591,6 +770,34 @@ function PostCard({
           <span>Discuss</span>
         </button>
         <div className="social-action-spacer" />
+        <button
+          type="button"
+          className={`icon-button ${post.saved ? "saved" : ""}`}
+          disabled={!!busy}
+          aria-label={post.saved ? "Unsave post" : "Save post"}
+          aria-pressed={!!post.saved}
+          title={post.saved ? "Remove from saved" : "Save for later"}
+          onClick={() =>
+            act("save", async () => {
+              await call("feed.save", { id: post.id });
+              refresh();
+            })
+          }
+        >
+          <Bookmark size={16} fill={post.saved ? "currentColor" : "none"} />
+        </button>
+        {post.authorId === profile?.id && (
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Edit post"
+            title="Edit post"
+            disabled={!!busy}
+            onClick={() => setEditing(true)}
+          >
+            <Pencil size={16} />
+          </button>
+        )}
         {post.authorId !== profile?.id && (
           <button
             className="icon-button"
@@ -625,7 +832,10 @@ function PostCard({
           ) : (
             list(comments.data).map((c) => (
               <div className="social-comment" key={c.id}>
-                <Avatar name={c.authorName || "Researcher"} />
+                <Avatar
+                  name={c.authorName || "Researcher"}
+                  src={c.authorAvatarUrl}
+                />
                 <div>
                   <Link
                     className="researcher-name"
@@ -666,6 +876,11 @@ function PostCard({
           </form>
         </section>
       )}
+      <PostEditModal
+        post={post}
+        open={editing}
+        onClose={() => setEditing(false)}
+      />
     </article>
   );
 }
@@ -867,7 +1082,7 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                       className={`chat-list-item ${selectedId === c.id ? "active" : ""}`}
                       onClick={() => setParams({ chat: c.id })}
                     >
-                      <Avatar name={name} />
+                      <Avatar name={name} src={c.avatarUrls?.[other]} />
                       <div>
                         <strong>{name}</strong>
                         <p>{c.lastMessage || "Start with a hello."}</p>
@@ -894,7 +1109,10 @@ export function Messages({ onAuth }: { onAuth: () => void }) {
                 <>
                   <header className="chat-thread-header">
                     <div className="social-author">
-                      <Avatar name={otherName} />
+                      <Avatar
+                        name={otherName}
+                        src={chat?.avatarUrls?.[otherId]}
+                      />
                       <div>
                         <strong>{otherName}</strong>
                         <small>
@@ -1218,7 +1436,7 @@ export function Impact() {
                     <span className={`impact-rank ${index < 3 ? "top" : ""}`}>
                       {String(index + 1).padStart(2, "0")}
                     </span>
-                    <Avatar name={p.name} color={p.color} />
+                    <Avatar name={p.name} src={p.avatarUrl} color={p.color} />
                     <div className="impact-person">
                       <strong>{p.name}</strong>
                       <p>{p.institution || "Independent researcher"}</p>
@@ -1270,5 +1488,127 @@ export function Impact() {
         </>
       )}
     </>
+  );
+}
+
+function PostEditModal({
+  post,
+  open,
+  onClose,
+}: {
+  post: Row;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { call, refresh, toast } = useApp();
+  const [body, setBody] = useState(post.body),
+    [type, setType] = useState<PostType>(post.postType || "update"),
+    [assets, setAssets] = useState<MediaAsset[]>(post.attachments || []),
+    [uploading, setUploading] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  useEffect(() => {
+    if (open) {
+      setBody(post.body);
+      setType(post.postType || "update");
+      setAssets(post.attachments || []);
+      setError("");
+    }
+  }, [open, post.id]);
+  const originalIds = (post.attachments || []).map((a: MediaAsset) => a.id);
+  function close() {
+    if (busy || uploading) return;
+    for (const asset of assets)
+      if (!originalIds.includes(asset.id))
+        void call("media.remove", { id: asset.id }).catch(() => {});
+    onClose();
+  }
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (busy || uploading) return;
+    setBusy(true);
+    setError("");
+    try {
+      await call("feed.edit", {
+        id: post.id,
+        body: body.trim(),
+        postType: type,
+        mediaIds: assets.map((a) => a.id),
+      });
+      onClose();
+      refresh();
+      toast("Post updated.");
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal
+      open={open}
+      onClose={close}
+      title="Edit your post"
+      description="Update the text and attachments. Existing likes and discussion stay with the post."
+    >
+      <form className="form" onSubmit={save}>
+        <label>
+          Post type
+          <select
+            aria-label="Post type"
+            value={type}
+            disabled={busy || uploading}
+            onChange={(e) => setType(e.target.value as PostType)}
+          >
+            {POST_TYPES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Your post
+          <textarea
+            aria-label="Your post"
+            value={body}
+            required
+            maxLength={10000}
+            rows={5}
+            disabled={busy}
+            onChange={(e) => setBody(e.target.value)}
+          />
+        </label>
+        <MediaPicker
+          value={assets}
+          onChange={setAssets}
+          disabled={busy}
+          onBusy={setUploading}
+          originalIds={originalIds}
+        />
+        <p className="fine-print">
+          Files attached here are shared with signed-in community members. Keep
+          confidential manuscript drafts in your private workspace.
+        </p>
+        {error && <ErrorBox message={error} />}
+        <div className="button-row">
+          <button
+            type="submit"
+            className="button primary"
+            disabled={busy || uploading || !body.trim()}
+          >
+            {busy ? "Saving…" : uploading ? "Uploading…" : "Save changes"}
+          </button>
+          <button
+            type="button"
+            className="button"
+            disabled={busy || uploading}
+            onClick={close}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

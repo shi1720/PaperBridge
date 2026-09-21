@@ -14,6 +14,7 @@ const routes = [
   "messages",
   "papers/demo-paper",
   "requests/demo-request",
+  "requests/demo-request?tab=activity",
   "settings?tab=ai",
 ];
 for (const width of [1440, 390]) {

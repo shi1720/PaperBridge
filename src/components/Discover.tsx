@@ -246,7 +246,12 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
               {people.map((p: Profile) => (
                 <article className="person-card" key={p.id}>
                   <div className="person-top">
-                    <Avatar name={p.name} color={p.color} large />
+                    <Avatar
+                      src={p.avatarUrl}
+                      name={p.name}
+                      color={p.color}
+                      large
+                    />
                     <button
                       aria-label={`${saved.includes(p.id) ? "Unfollow" : "Follow"} ${p.name}`}
                       aria-pressed={saved.includes(p.id)}
@@ -430,7 +435,12 @@ export function Discover({ onAuth }: { onAuth: () => void }) {
       >
         {selected && (
           <div className="profile-detail">
-            <Avatar name={selected.name} color={selected.color} large />
+            <Avatar
+              src={selected.avatarUrl}
+              name={selected.name}
+              color={selected.color}
+              large
+            />
             <h3>{selected.headline}</h3>
             <p>{selected.bio}</p>
             <div className="tags">

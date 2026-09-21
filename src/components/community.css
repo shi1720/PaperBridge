@@ -1,0 +1,500 @@
+.community-v2 .social-composer {
+  border: 1px solid #d7e0d1;
+  background: linear-gradient(155deg, #fcfdf9 0, #fff 75%);
+  box-shadow: 0 5px 18px #31472806;
+}
+.community-v2 .social-author > .avatar {
+  width: 43px;
+  height: 43px;
+}
+.community-v2 .social-author strong {
+  font-size: 14px;
+}
+.community-v2 .social-author .text-link {
+  font-size: 10px;
+  margin-top: 6px;
+}
+.post-type-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0;
+}
+.post-type-choices > button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 9px;
+  border: 1px solid #dce4d5;
+  border-radius: 5px;
+  background: #fff;
+  color: #5a6a50;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.post-type-choices > button.selected {
+  background: #eaf2db;
+  color: #37532b;
+  border-color: #b8cba2;
+}
+.community-v2 .social-composer > textarea {
+  border: 1px solid #dce5d4;
+  min-height: 128px;
+  font-size: 14px;
+  line-height: 1.75;
+  background: #fff;
+  padding: 16px;
+  border-radius: 7px;
+}
+.post-link-options {
+  border-bottom: 1px solid #e4e9de;
+  padding: 0 0 12px;
+}
+.post-link-options summary {
+  font-size: 11px;
+  color: #57704a;
+  cursor: pointer;
+  padding: 5px 0;
+}
+.post-link-options .social-attachments {
+  margin-top: 12px;
+}
+.community-v2 .social-compose-footer {
+  align-items: end;
+  gap: 18px;
+}
+.community-v2 .social-compose-footer .fine-print {
+  font-size: 10px;
+  line-height: 1.7;
+  max-width: 340px;
+  color: #5c6e52;
+}
+.community-v2 .social-compose-footer .button {
+  white-space: nowrap;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.community-v2 .social-feed-heading {
+  margin-bottom: 9px;
+  gap: 15px;
+}
+.community-v2 .category-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.community-type-filter select {
+  width: auto;
+  max-width: 170px;
+  font-size: 11px;
+  padding: 8px 27px 8px 10px;
+  background: #fff;
+  border-color: #d9e1d2;
+  border-radius: 5px;
+}
+.community-feed-context {
+  font-size: 10px;
+  color: #5b6c52;
+  margin: 0 0 20px;
+}
+.post-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.post-meta-row > small {
+  font-size: 10px;
+  color: #61715b;
+}
+.post-kind {
+  display: inline-flex;
+  font-size: 9px;
+  letter-spacing: 0.25px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #eef3e7;
+  border: 1px solid #dce5cf;
+  color: #526941;
+}
+.post-kind.question {
+  background: #f2eefa;
+  color: #68547d;
+  border-color: #e0d7ed;
+}
+.post-kind.paper {
+  background: #eaf2f5;
+  color: #486875;
+  border-color: #d4e3e9;
+}
+.post-kind.milestone {
+  background: #faf0df;
+  color: #816137;
+  border-color: #ecdebf;
+}
+.community-v2 .social-post {
+  box-shadow: 0 4px 14px #263e3104;
+}
+.community-v2 .social-post-body {
+  font-size: 14px;
+  line-height: 1.85;
+  margin-bottom: 17px;
+}
+.community-v2 .social-post-actions .saved {
+  color: #587838;
+  background: #edf4df;
+}
+.community-v2 .social-comments {
+  background: #f8faf5;
+  margin-top: 14px;
+  border-radius: 6px;
+  padding: 17px 13px;
+}
+.community-v2 .social-comment .avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 10px;
+}
+.community-starters {
+  display: grid;
+  border-block: 1px solid #dce5d2;
+  margin: 20px 0;
+}
+.community-starters > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  padding: 15px 0;
+  color: #506a40;
+  font-size: 11px;
+}
+.community-starters > button + button {
+  border-top: 1px solid #e4eadc;
+}
+.community-starters > button > span {
+  flex: 1;
+}
+.community-starters small {
+  font-size: 9px;
+  display: block;
+  color: #57674c;
+  margin-top: 3px;
+}
+.community-v2 .social-rail-stat {
+  padding-top: 0;
+}
+.community-v2 .rail-card > p {
+  font-size: 12px;
+  line-height: 1.85;
+}
+.researcher-profile-v2 {
+  overflow: hidden;
+}
+.researcher-profile-cover {
+  height: 90px;
+  background:
+    radial-gradient(circle at 90% 30%, #dce9bd 0, transparent 36%),
+    linear-gradient(120deg, #254b3a, #587749);
+  position: relative;
+}
+.researcher-profile-cover:after {
+  content: "";
+  position: absolute;
+  inset: 15px 35px 15px auto;
+  width: 110px;
+  border: 1px solid #d5e2bb55;
+  border-radius: 50%;
+  transform: rotate(-20deg);
+}
+.researcher-profile-v2 .researcher-profile {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.researcher-profile-main {
+  padding: 0 32px 30px;
+}
+.researcher-profile-v2 .researcher-profile-identity {
+  margin-top: -35px;
+  position: relative;
+  align-items: end;
+  gap: 20px;
+}
+.researcher-profile-v2 .researcher-profile-identity > .avatar {
+  width: 98px;
+  height: 98px;
+  font-size: 32px;
+  border: 5px solid #fff;
+  box-shadow: 0 3px 7px #16332610;
+}
+.researcher-profile-v2 .researcher-profile-identity > div {
+  padding-bottom: 8px;
+}
+.researcher-profile-v2 .researcher-profile-identity h2 {
+  font-size: 27px;
+  margin: 0 0 6px;
+}
+.researcher-profile-v2 .researcher-profile-identity p {
+  margin: 0;
+  font-size: 12px;
+  color: #68715f;
+}
+.researcher-profile-v2 .profile-headline {
+  font-size: 16px;
+  line-height: 1.7;
+  color: #4e6643;
+  margin: 20px 0;
+}
+.researcher-profile-v2 .researcher-bio {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #52634a;
+}
+.researcher-profile-v2 h3 {
+  font-size: 13px;
+  margin: 25px 0 12px;
+  letter-spacing: 0;
+}
+.profile-social-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 25px;
+  align-items: start;
+}
+.profile-activity {
+  padding: 24px;
+}
+.profile-activity-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.profile-activity-heading h2 {
+  font-size: 20px;
+}
+.profile-activity-post {
+  border-top: 1px solid #e0e7d9;
+  padding: 19px 0;
+}
+.profile-activity-post > p {
+  font-size: 13px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 12px 0;
+}
+.profile-activity-post .profile-post-date {
+  font-size: 10px;
+  color: #64735a;
+  margin-left: auto;
+}
+.profile-activity-post .button-row {
+  font-size: 11px;
+  justify-content: space-between;
+  color: #5c7050;
+}
+.profile-activity-post .text-link {
+  font-size: 11px;
+}
+.profile-activity-empty {
+  background: #f3f6ed;
+  border: 1px dashed #cddbbf;
+  border-radius: 7px;
+  padding: 22px;
+  text-align: center;
+  color: #50683f;
+}
+.profile-activity-empty h3 {
+  font-size: 17px;
+  margin: 12px 0 10px;
+}
+.profile-activity-empty p {
+  font-size: 12px;
+  margin-bottom: 0;
+}
+.researchers-v2 .person-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #edf2e4 0, #edf2e4 46px, #fff 46px);
+  padding-top: 22px;
+}
+.researchers-v2 .person-card > .avatar {
+  border: 4px solid white;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 12px;
+}
+.researchers-v2 .person-card h2 {
+  font-size: 20px;
+}
+.researchers-v2 .person-headline {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.researchers-v2 .person-card > .text-link {
+  border-top: 1px solid #e2e8dc;
+  padding-top: 16px;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.researchers-v2 .person-card .tags {
+  margin-bottom: 20px;
+}
+@media (max-width: 1100px) {
+  .profile-social-layout {
+    grid-template-columns: 1fr;
+  }
+  .profile-activity {
+    padding: 25px;
+  }
+  .community-v2 .social-feed-heading {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  .community-type-filter select {
+    font-size: 10px;
+  }
+}
+@media (max-width: 600px) {
+  .community-v2 .social-composer {
+    padding: 18px;
+  }
+  .post-type-choices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .post-type-choices > button {
+    padding: 9px;
+    font-size: 10px;
+    justify-content: center;
+  }
+  .community-v2 .social-compose-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .community-v2 .social-compose-footer .button {
+    align-self: flex-end;
+  }
+  .community-v2 .social-composer > textarea {
+    font-size: 13px;
+    padding: 13px;
+    min-height: 140px;
+  }
+  .community-v2 .social-post {
+    padding: 18px;
+  }
+  .community-v2 .social-post-header {
+    gap: 12px;
+  }
+  .community-v2 .social-post-header .button {
+    font-size: 10px;
+    padding: 7px 9px;
+  }
+  .community-v2 .social-post-body {
+    font-size: 13px;
+  }
+  .community-v2 .social-post-actions {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .community-v2 .social-post-actions .icon-button {
+    width: 28px;
+    height: 28px;
+  }
+  .community-v2 .social-post-actions .social-action {
+    gap: 4px;
+    font-size: 10px;
+  }
+  .community-v2 .social-action-spacer {
+    min-width: 0;
+  }
+  .community-type-filter select {
+    max-width: 150px;
+  }
+  .researcher-profile-main {
+    padding: 0 20px 24px;
+  }
+  .researcher-profile-v2 .researcher-profile-identity {
+    gap: 13px;
+    align-items: end;
+  }
+  .researcher-profile-v2 .researcher-profile-identity > .avatar {
+    width: 82px;
+    height: 82px;
+    font-size: 26px;
+  }
+  .researcher-profile-v2 .researcher-profile-identity h2 {
+    font-size: 23px;
+  }
+  .researcher-profile-v2 .profile-headline {
+    font-size: 14px;
+  }
+  .profile-activity {
+    padding: 20px;
+  }
+  .profile-activity-post > p {
+    font-size: 12px;
+  }
+}
+.researcher-profile-v2 .researcher-profile-identity h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  margin: 0 0 7px;
+}
+.profile-institution {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #637259;
+  margin: 16px 0;
+}
+.profile-social-actions {
+  padding-bottom: 22px;
+  border-bottom: 1px solid #e0e8d8;
+  margin: 20px 0;
+}
+.profile-social-actions > .button {
+  font-size: 12px;
+}
+.profile-activity-empty > .button {
+  margin-top: 18px;
+  font-size: 11px;
+}
+.profile-more-community {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid #dce5d2;
+  padding-top: 18px;
+  font-size: 11px;
+}
+.researchers-v2 .person-card > .post-kind {
+  margin: 9px 0 0;
+}
+.researchers-v2 .institution {
+  margin-top: 10px;
+}
+@media (max-width: 600px) {
+  .researcher-profile-v2 .researcher-profile-identity h1 {
+    font-size: 23px;
+  }
+  .profile-social-actions {
+    flex-wrap: wrap;
+    gap: 9px;
+  }
+  .profile-social-actions > .button {
+    font-size: 11px;
+  }
+}
+.researcher-profile-v2 {
+  padding: 0;
+}
