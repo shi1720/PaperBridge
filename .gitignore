@@ -1,0 +1,14 @@
+node_modules/
+dist/
+functions/lib/
+.env*
+!.env.example
+.firebase/
+*-debug.log
+playwright-report/
+test-results/
+.secrets/
+.DS_Store
+*.tsbuildinfo
+functions/.secret.local
+functions/.env.local
