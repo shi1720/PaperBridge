@@ -1,41 +1,89 @@
+<div align="center">
+
 # PaperBridge
 
-A private-first research collaboration workspace for independent researchers and arXiv endorsers. Built with React/TypeScript and Firebase Authentication, Functions, Firestore, Storage, and Hosting.
+### Independent minds. Shared progress.
 
-## Release status
+A research workspace that connects people, private manuscripts and specialist AI feedback.
 
-The production homepage explains endorsement requests, category filters, researcher profiles, private manuscript collaboration, specialist AI review and the researcher social network, with separate researcher and endorser entry points. Fictional profiles and the interactive fixture are excluded from production; local development retains a labeled demo.
+[**Try PaperBridge**](https://paperbridge.web.app/) · [**Watch the demo**](https://www.youtube.com/watch?v=ayknhfM37LQ) · [**Explore the architecture**](#architecture) · [**Run locally**](#run-locally)
 
-[paperbridge.web.app](https://paperbridge.web.app) retains its original Hosting project. The backend is isolated in the owner's existing billed project, with a dedicated database, Auth tenant, bucket and runtime identity. Production email/password registration is enabled after live cloud checks and real Brevo SMTP delivery. Gmail received all six controlled messages: five in Inbox and one submission confirmation in Spam. See the [validation record](docs/validation.md) for verified outcomes.
+[![Verify PaperBridge](https://github.com/shi1720/PaperBridge/actions/workflows/ci.yml/badge.svg)](https://github.com/shi1720/PaperBridge/actions/workflows/ci.yml)
 
-## What is implemented
+![PaperBridge discovery interface, connecting independent researchers with potential collaborators and arXiv endorsers.](docs/media/overview.png)
 
-- A role-aware workspace overview with recent manuscripts, prioritized next steps, unread activity and setup guidance.
-- A dedicated activity inbox with individual/all read actions and research, discussion, connection and message filters. Chat has unread counts, recipient/conversation search, draft continuity and read cutoffs that preserve newer incoming messages.
-- Researcher and endorser onboarding, email/password and optional Google authentication, verification, recovery, public profiles, 155 canonical arXiv categories, self-attested eligibility, availability and capacity.
-- Private PDF manuscripts, immutable revisions, searchable PDF reader with thumbnails, fit-width/focus controls, persistent highlights, editable private/shared notes, anchored navigation, drafts retained during workspace navigation, threaded replies and resolution, and extraction/coverage diagnostics.
-- Atomic endorsement requests with duplicate/capacity protection and a dedicated in-app collaboration workspace: stage tracking, manuscript and request-scoped shared notes, discussion, revisions and activity history. Reviewing/change-request/offer/decline/withdrawal states and author-reported arXiv completion remain explicit. Email provides notifications linking back into the workspace.
-- Branded HTML/plain-text verification, password recovery and two-recipient review emails, with an embedded logo, durable SMTP outbox, retry/backoff and honest queued/sent/failed visibility.
-- Community image/PDF posts, four post categories, edit/delete, saved reading lists, in-app attachment viewing, arXiv links, likes/comments, following, paginated community/following feeds, researcher profiles with photos, private chat, notifications, blocking and reporting. Authenticated media uploads are validated; images are decoded and re-encoded, file access is signed and temporary, and cleanup removes abandoned/replaced uploads.
-- Encrypted per-user OpenAI/Anthropic/Gemini keys; dynamic model catalogs; five independently configured specialists for evidence, attribution, methods, formatting and submission readiness; GPT-6 Astra medium recommendation when available; full extracted-text or explicit partial coverage; synthesis and export, optional Crossref metadata tools, exact-quote grounding, source audit, explicit consent, usage limits, and safe retry IDs.
-- Account exports, provider-key removal, profile privacy and deletion with token revocation, in-flight operation leases, anonymization and retryable cleanup.
-- Responsive layouts, keyboard-accessible dialogs, empty/error/loading states, CSP/security headers and automated browser/access-control tests.
+</div>
 
-PaperBridge coordinates connections. It does not grant arXiv endorsement, verify someone’s current arXiv privileges, perform peer review certification, or promise publication. Contribution counts are author-reported. Attribution review is not a comprehensive plagiarism scan.
+## Research should not stop at the edge of your network
 
-## Local development
+Finding someone qualified to discuss a paper is difficult without an established academic network. Finding that person is only the first step: the manuscript, the conversation, the feedback and the next revision still need somewhere to come together.
 
-Requires Node 22 and Java 21 for Firebase emulators.
+PaperBridge connects that journey. Discover potential collaborators and arXiv endorsers, work through a draft in a private workspace, and use optional AI review to identify questions worth investigating before the next revision.
+
+Built by [Shivam Gupta](https://shivamgupta.web.app/), from product design through implementation, testing and deployment. The live application and source are publicly accessible. The screenshots and walkthrough use sample manuscripts and demo accounts.
+
+## What you can do
+
+| Workflow                     | What is implemented                                                                                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Find the right people**    | Researcher and endorser profiles, 155 arXiv categories, research interests, availability, capacity and self-reported eligibility.                                 |
+| **Collaborate privately**    | Endorsement requests, explicit review stages, discussion, immutable PDF revisions and request activity. Duplicate and capacity checks run atomically.             |
+| **Keep feedback in context** | A searchable PDF reader, highlights, private or shared notes, threaded replies and resolution, with annotations attached to a manuscript version.                 |
+| **Review a draft with AI**   | Five configurable specialists examine evidence, attribution, methods, formatting and submission readiness. A synthesis step produces a prioritized revision plan. |
+| **Build a research network** | Image and PDF posts, reading lists, following, comments, private chat, an activity inbox, blocking and reporting.                                                 |
+| **Stay in control**          | Explicit AI consent, encrypted provider keys, account export, key removal and account deletion with retryable cleanup.                                            |
+
+The core workspace is free. Optional AI review uses the researcher's own OpenAI, Anthropic or Gemini account and provider billing. Review coverage, supporting quotations and partial results remain visible.
+
+### A shared manuscript workspace
+
+![Private manuscript workspace with version-aware PDF annotations, review stages and researcher discussion.](docs/media/workspace.png)
+
+### Several perspectives, one revision plan
+
+![Specialist AI review with evidence, attribution, methods, formatting and submission-readiness findings.](docs/media/ai-review.png)
+
+**Research boundaries:** PaperBridge is independent of arXiv. It does not grant endorsement, verify current arXiv privileges, certify peer review or promise publication. Endorsement takes place on arXiv itself. AI review supports human judgment; attribution feedback is not a comprehensive plagiarism scan.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    UI[React + TypeScript workspace] --> Auth[Firebase Authentication]
+    UI --> API[Cloud Functions: authenticated callable API]
+    API --> DB[Firestore: permissions and workflow state]
+    API --> Files[Cloud Storage: private manuscripts and media]
+    API --> AI[AI review orchestration]
+    AI --> Providers[OpenAI / Anthropic / Gemini]
+    AI --> Metadata[Optional Crossref metadata]
+    API --> Outbox[Durable email outbox]
+    Outbox --> SMTP[Transactional SMTP delivery]
+```
+
+- **Frontend:** React, TypeScript, Vite, React Router, Radix UI and PDF.js.
+- **Backend:** Firebase Authentication, Cloud Functions, Firestore, Cloud Storage and Firebase Hosting.
+- **Access control:** The callable API enforces permissions. Direct client database access is denied. Shared notes are scoped to the relevant collaboration; private notes remain restricted to their author.
+- **Manuscript access:** Signed PDF links expire after ten minutes. Withdrawing a request prevents new reviewer links. Previously issued links remain valid until expiry, and downloaded copies cannot be recalled.
+- **AI:** Encrypted per-user keys, separate provider adapters, structured findings, quotation validation, extraction-coverage diagnostics, usage limits and retry IDs. Five specialists feed a final synthesis.
+- **Operations:** Validated uploads, temporary media links, a retryable SMTP outbox, verification and recovery emails, and account cleanup. The production client and isolated backend use explicitly configured Firebase resources.
+
+## Run locally
+
+**Prerequisites:** Node.js 22. The backend emulator suite also needs Java 21.
 
 ```sh
+git clone https://github.com/shi1720/PaperBridge.git
+cd PaperBridge
 npm ci
 npm --prefix functions ci
 npm run dev
 ```
 
-Open `http://localhost:5173/?demo=1` for the clearly labeled interactive demo. It uses in-memory state and a fictional PDF fixture. Refreshing resets demo data. Real account data is stored in Firebase, not browser storage.
+Open **http://localhost:5173/?demo=1**. This labeled development demo uses fictional profiles and an in-memory PDF fixture. No provider key is required. Refreshing resets the demo. These fixtures are excluded from production.
 
-For the real backend locally:
+### Use the Firebase backend locally
+
+Start the emulators:
 
 ```sh
 npm --prefix functions run build
@@ -43,37 +91,64 @@ node scripts/prepare-emulator.cjs
 npx firebase emulators:start --only auth,firestore,storage,functions --project demo-paperbridge
 ```
 
-Start Vite in another terminal with `VITE_FIREBASE_AUTH_TENANT_ID=` (empty), `VITE_USE_EMULATORS=true`, `VITE_FIREBASE_PROJECT_ID=demo-paperbridge`, `VITE_FIREBASE_STORAGE_BUCKET=demo-paperbridge.appspot.com`, and `VITE_FIREBASE_API_KEY=emulator-key`. Emulated verification emails are visible in the emulator output/UI. The tests verify email addresses through the Auth emulator only; there is no production verification bypass.
+In a second terminal, start the frontend against those emulators:
 
-See the [September experience audit](docs/experience-improvements.md) for specific fixes, independent review findings and release checks.
+```sh
+VITE_FIREBASE_AUTH_TENANT_ID= \
+VITE_USE_EMULATORS=true \
+VITE_FIREBASE_PROJECT_ID=demo-paperbridge \
+VITE_FIREBASE_STORAGE_BUCKET=demo-paperbridge.appspot.com \
+VITE_FIREBASE_API_KEY=emulator-key \
+npm run dev
+```
+
+Emulated verification emails appear in emulator output/UI. Tests verify addresses through the Auth emulator only; production has no verification bypass. Real accounts use Firebase storage, not browser storage.
 
 ## Verification
 
 ```sh
+# Unit tests, backend checks and production build
 npm run check
+
+# Emulator integration tests and browser journeys
 npx playwright install --with-deps chromium webkit
 npm run test:full
+
+# Runtime dependency audits
+npm audit --omit=dev
+npm --prefix functions audit --omit=dev
 ```
 
-`test:full` starts an isolated demo Firebase suite, tests the backend, then starts two Vite servers and executes browser flows. Stop previously running emulators first to avoid port conflicts. The backend integration suite intentionally resets the **demo-paperbridge emulator database**, never a live project. Do not run it against a development session containing data you need.
+CI runs the integration suite in Chromium and responsive journeys in WebKit. Coverage includes two-account sign-up, verified role setup, PDF upload/rendering, category matching, review requests, feedback, withdrawal, loss of reviewer access, mobile layouts and accessibility checks.
 
-The browser suite covers genuine two-account sign-up, verified role setup, PDF upload/rendering, category matching, request/feedback/withdrawal and loss of reviewer access; demo UI journeys and mobile layout; AI result rendering; and accessibility checks. Provider network calls are mocked in the automatic suite. Separately authorized live OpenAI checks include six-stage GPT-6 Astra medium generation and earlier complete browser-to-callable BYOK verification; Anthropic/Gemini have adapter tests but no live key was supplied.
+`test:full` starts an isolated Firebase suite and two Vite servers. Stop earlier emulator sessions to avoid port conflicts. Integration tests reset the **demo-paperbridge emulator database**; do not keep work you need in that emulator while testing.
 
-## Deployment
+Provider calls are mocked in the automated suite. Separate live checks exercised OpenAI review, browser-to-callable encrypted-key handling, manuscript flows and real email delivery. Anthropic and Gemini have adapter tests; their live integrations have not been verified with supplied credentials. See the [validation record](docs/validation.md) for evidence and limits.
 
-Follow [deployment.md](docs/deployment.md). Keep provider keys out of `.env` files and browser bundles. Firebase web config is public application configuration; server encryption and SMTP secrets belong in Secret Manager.
+## Documentation
 
-- `npm run deploy:hosting` publishes the public homepage and client without modifying backend resources.
-- `npm run deploy` deploys the isolated backend and then the original Hosting site, each with an explicit project.
-- Enable `VITE_SERVICE_READY=true` only after production Auth, Functions, Storage authorization, PDF signing/CORS, and real transactional email delivery are verified.
-- Enable `VITE_GOOGLE_AUTH_ENABLED=true` only after the Google provider and OAuth domains are configured and tested.
+| Guide                                               | Contents                                                             |
+| --------------------------------------------------- | -------------------------------------------------------------------- |
+| [Deployment](docs/deployment.md)                    | Firebase resources, secrets, rollout and verification                |
+| [API contract](docs/contract.md)                    | Operations and authorization boundaries                              |
+| [Backend operations](docs/backend.md)               | Storage, functions, email and cleanup                                |
+| [AI design](docs/ai.md)                             | Specialist orchestration, grounding and verification                 |
+| [Validation record](docs/validation.md)             | Automated and live checks                                            |
+| [Experience audit](docs/experience-improvements.md) | Usability findings and fixes                                         |
+| [Product study](docs/product-review.md)             | Simulated research, explicitly distinguished from real user evidence |
 
-## Architecture and limitations
+## Deployment and current limits
 
-[Validation record](docs/validation.md) · [API contract](docs/contract.md) · [Backend operations](docs/backend.md) · [AI design and verification](docs/ai.md) · [Simulated product study](docs/product-review.md)
+The checked-in deployment configuration targets the existing PaperBridge infrastructure. **For your own deployment, configure your own Firebase projects and resources first** using the [deployment guide](docs/deployment.md).
 
-The callable API is the only client entrypoint to Firestore. Direct client database access is denied. PDF URLs expire after ten minutes; a withdrawal prevents new links, but existing links survive until expiry and downloaded copies cannot be recalled. Notes created in a request workspace are scoped to that participant pair, with private notes restricted to their author. Earlier paper-wide shared annotations retain their original audience. Closing a request stops new reviewer access.
+Provider keys must never appear in browser bundles or committed environment files. Firebase web configuration is public application configuration; encryption and SMTP credentials belong in Secret Manager. Enable production account flows and Google sign-in only after their required services and OAuth domains have been configured and verified.
 
-Current deliberate limits: no paid subscription checkout; moderation reports require an operator; histories return bounded newest records without older-message pagination; no OCR/full-text plagiarism corpus; AI is a bounded synchronous six-stage pipeline with saved partial results rather than a durable background queue. Production billing alerts, App Check enforcement, monitoring and a staffed support process are operator setup work. These are not represented as completed.
+Current limits are explicit:
 
-The repository is private. Development fixtures are fictional and are not production member records.
+- No paid subscription checkout, OCR or full-text plagiarism corpus.
+- Moderation reports need an operator. Some histories return bounded recent records without older-message pagination.
+- AI review is a bounded synchronous six-stage pipeline with saved partial results, rather than a durable background queue.
+- Billing alerts, App Check enforcement, monitoring and a staffed support process remain operator setup work.
+- Early product research was simulated. Observing real researchers and reviewers is the next validation step.
+
+For a bug or improvement, open an issue with a reproducible example. Report security concerns privately using [SECURITY.md](SECURITY.md).

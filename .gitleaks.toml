@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+# This exact nonfunctional key exercises encrypted-key storage in emulator tests.
+# Both the file path and exact secret must match; other test secrets are scanned.
+[[allowlists]]
+description = "Synthetic encrypted-key integration fixture"
+condition = "AND"
+paths = ['''^functions/test/ai\.integration\.cjs$''']
+regexTarget = "secret"
+regexes = ['''^test-api-key-at-least-20-chars$''']
